@@ -6,6 +6,8 @@ a research demonstration and must not be used as a medical diagnostic system.
 
 from __future__ import annotations
 
+import base64
+import json
 import os
 from contextlib import asynccontextmanager
 from io import BytesIO
@@ -16,7 +18,7 @@ import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, ImageOps, UnidentifiedImageError
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from validator import validate_radiological_scan
@@ -24,28 +26,70 @@ from validator import validate_radiological_scan
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "models"
 STROKE_MODEL_PATH = MODEL_DIR / "brain_stroke.keras"
-LUNG_MODEL_PATH = MODEL_DIR / "lung_cancer.keras"
+RETRAINED_LUNG_MODEL_PATH = MODEL_DIR / "lung_cancer_retrained.keras"
+LEGACY_LUNG_MODEL_PATH = MODEL_DIR / "lung_cancer.keras"
+configured_lung_model = os.getenv("CURENET_LUNG_MODEL_PATH")
+if configured_lung_model:
+    configured_path = Path(configured_lung_model)
+    LUNG_MODEL_PATH = (
+        configured_path
+        if configured_path.is_absolute()
+        else BASE_DIR / configured_path
+    ).resolve()
+else:
+    LUNG_MODEL_PATH = (
+        RETRAINED_LUNG_MODEL_PATH
+        if RETRAINED_LUNG_MODEL_PATH.exists()
+        else LEGACY_LUNG_MODEL_PATH
+    ).resolve()
 MAX_UPLOAD_BYTES = int(os.getenv("CURENET_MAX_UPLOAD_BYTES", 10 * 1024 * 1024))
 Image.MAX_IMAGE_PIXELS = 25_000_000
 
 STROKE_INPUT_SHAPE = (224, 224, 3)
-LUNG_INPUT_SHAPE = (128, 128, 3)
+DEFAULT_LUNG_INPUT_SHAPE = (128, 128, 3)
 RESEARCH_WARNING = (
     "Research demonstration only. This output is not a medical diagnosis and "
     "must not replace evaluation by a qualified clinician."
 )
 
 
-def _lung_class_names() -> tuple[str, str, str]:
+def _lung_contract() -> tuple[tuple[str, str, str], tuple[int, int, int], str]:
+    metadata_path = LUNG_MODEL_PATH.with_suffix(".metadata.json")
+    if metadata_path.exists():
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            raw_names = metadata["class_names"]
+            raw_shape = metadata["input_shape"]
+            names = tuple(str(item).strip().lower() for item in raw_names)
+            shape = tuple(int(value) for value in raw_shape)
+            if len(names) != 3 or len(set(names)) != 3:
+                raise ValueError("class_names must contain three unique labels")
+            if len(shape) != 3 or shape[2] != 3 or min(shape) <= 0:
+                raise ValueError("input_shape must be [height, width, 3]")
+            return names, shape, "model_metadata"  # type: ignore[return-value]
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"Invalid lung model metadata at {metadata_path}: {exc}") from exc
+
     raw = os.getenv("CURENET_LUNG_CLASS_NAMES", "class_0,class_1,class_2")
     names = tuple(item.strip() for item in raw.split(",") if item.strip())
-    if len(names) != 3:
-        raise RuntimeError("CURENET_LUNG_CLASS_NAMES must contain exactly 3 labels")
-    return names  # type: ignore[return-value]
+    if len(names) != 3 or len(set(names)) != 3:
+        raise RuntimeError("CURENET_LUNG_CLASS_NAMES must contain exactly 3 unique labels")
+    return names, DEFAULT_LUNG_INPUT_SHAPE, "legacy_configuration"  # type: ignore[return-value]
 
 
-LUNG_CLASS_NAMES = _lung_class_names()
+LUNG_CLASS_NAMES, LUNG_INPUT_SHAPE, LUNG_CONTRACT_SOURCE = _lung_contract()
+LUNG_SEMANTICS_VERIFIED = set(LUNG_CLASS_NAMES) == {"normal", "benign", "malignant"}
 models: dict[str, object] = {}
+
+
+class AttentionAnalysis(BaseModel):
+    method: str
+    overlay_image: str
+    region_percent: float
+    peak_x_percent: float
+    peak_y_percent: float
+    description: str
+    disclaimer: str
 
 
 class PredictionResponse(BaseModel):
@@ -61,8 +105,11 @@ class PredictionResponse(BaseModel):
     recommended_action: str
     patient_headline: str
     patient_explanation: str
-    common_causes: list[str] = []
+    common_causes: list[str] = Field(default_factory=list)
+    attention: AttentionAnalysis | None = None
     warning: str = RESEARCH_WARNING
+    plain_english: str = ""
+    next_steps: list[str] = Field(default_factory=list)
 
 
 def validate_model_contract(
@@ -155,6 +202,9 @@ async def health() -> dict[str, object]:
             "stroke": "stroke" in models,
             "lung": "lung" in models,
         },
+        "lung_contract_source": LUNG_CONTRACT_SOURCE,
+        "lung_class_names": list(LUNG_CLASS_NAMES),
+        "lung_semantics_verified": LUNG_SEMANTICS_VERIFIED,
     }
 
 
@@ -189,6 +239,129 @@ def decode_and_preprocess(contents: bytes, target_size: tuple[int, int]) -> np.n
     return np.expand_dims(array, axis=0)
 
 
+def _position_label(x_percent: float, y_percent: float) -> str:
+    horizontal = (
+        "left side of the displayed image"
+        if x_percent < 40
+        else "right side of the displayed image"
+        if x_percent > 60
+        else "horizontal center of the displayed image"
+    )
+    vertical = (
+        "upper portion"
+        if y_percent < 40
+        else "lower portion"
+        if y_percent > 60
+        else "vertical center"
+    )
+    return f"{vertical}, {horizontal}"
+
+
+def build_lung_attention(
+    model: object,
+    image_batch: np.ndarray,
+    original_contents: bytes,
+    class_index: int,
+) -> AttentionAnalysis:
+    """Create a Grad-CAM explanation for the selected lung class.
+
+    This is a classifier-attention map, not a lesion mask. Its only supported
+    interpretation is which image regions influenced the selected class score.
+    """
+    import tensorflow as tf
+
+    keras_model = model  # Kept generic at the API boundary for testability.
+    feature_layer = next(
+        (
+            layer
+            for layer in reversed(getattr(keras_model, "layers"))
+            if len(getattr(getattr(layer, "output", None), "shape", ())) == 4
+        ),
+        None,
+    )
+    if feature_layer is None:
+        raise RuntimeError("The lung model has no spatial feature layer for Grad-CAM")
+
+    tensor = tf.convert_to_tensor(image_batch)
+    feature_index = getattr(keras_model, "layers").index(feature_layer)
+    with tf.GradientTape() as tape:
+        value = tensor
+        for layer in getattr(keras_model, "layers")[1 : feature_index + 1]:
+            value = layer(value, training=False)
+        feature_maps = value
+        for layer in getattr(keras_model, "layers")[feature_index + 1 :]:
+            value = layer(value, training=False)
+        predictions = value
+        selected_score = predictions[:, class_index]
+    gradients = tape.gradient(selected_score, feature_maps)
+    if gradients is None:
+        raise RuntimeError("Could not calculate gradients for the selected lung class")
+
+    channel_weights = tf.reduce_mean(gradients, axis=(1, 2), keepdims=True)
+    heatmap = tf.reduce_sum(feature_maps * channel_weights, axis=-1)[0]
+    heatmap = tf.maximum(heatmap, 0)
+    maximum = float(tf.reduce_max(heatmap).numpy())
+    if maximum <= 0:
+        raise RuntimeError("The selected lung class produced an empty attention map")
+    heatmap_array = np.asarray(heatmap.numpy() / maximum, dtype=np.float32)
+
+    with Image.open(BytesIO(original_contents)) as opened:
+        original = ImageOps.exif_transpose(opened).convert("RGB")
+    resized_heatmap = Image.fromarray(
+        np.uint8(np.clip(heatmap_array, 0, 1) * 255)
+    ).resize(original.size, Image.Resampling.BILINEAR)
+    activation = np.asarray(resized_heatmap, dtype=np.float32) / 255.0
+    original_array = np.asarray(original, dtype=np.float32)
+
+    color = np.zeros_like(original_array)
+    color[..., 0] = 255
+    color[..., 1] = activation * 180
+    alpha = (np.clip((activation - 0.25) / 0.75, 0, 1) * 0.62)[..., None]
+    overlay_array = np.uint8(
+        np.clip(original_array * (1 - alpha) + color * alpha, 0, 255)
+    )
+    overlay = Image.fromarray(overlay_array)
+
+    max_overlay_dim = 384
+    if max(overlay.size) > max_overlay_dim:
+        scale = max_overlay_dim / max(overlay.size)
+        new_size = (
+            max(1, int(round(overlay.width * scale))),
+            max(1, int(round(overlay.height * scale))),
+        )
+        overlay = overlay.resize(new_size, Image.Resampling.BILINEAR)
+
+    encoded = BytesIO()
+    overlay.save(encoded, format="PNG", optimize=True)
+    overlay_data_url = "data:image/png;base64," + base64.b64encode(
+        encoded.getvalue()
+    ).decode("ascii")
+
+    peak_y, peak_x = np.unravel_index(np.argmax(activation), activation.shape)
+    height, width = activation.shape
+    peak_x_percent = 100.0 * (float(peak_x) + 0.5) / width
+    peak_y_percent = 100.0 * (float(peak_y) + 0.5) / height
+    region_percent = 100.0 * float(np.mean(activation >= 0.5))
+    position = _position_label(peak_x_percent, peak_y_percent)
+
+    return AttentionAnalysis(
+        method="grad_cam",
+        overlay_image=overlay_data_url,
+        region_percent=round(region_percent, 1),
+        peak_x_percent=round(peak_x_percent, 1),
+        peak_y_percent=round(peak_y_percent, 1),
+        description=(
+            f"The strongest influence on the selected class was in the {position}. "
+            f"Approximately {region_percent:.1f}% of displayed pixels reached at least "
+            "half of the peak activation."
+        ),
+        disclaimer=(
+            "Grad-CAM shows classifier influence, not a detected lesion, anatomical "
+            "measurement, or cancer location."
+        ),
+    )
+
+
 def stroke_response(raw_output: np.ndarray) -> PredictionResponse:
     stroke_score = float(np.asarray(raw_output).reshape(-1)[0])
     stroke_score = float(np.clip(stroke_score, 0.0, 1.0))
@@ -196,22 +369,37 @@ def stroke_response(raw_output: np.ndarray) -> PredictionResponse:
     prediction = "stroke" if is_stroke else "no_stroke"
     probability = stroke_score if is_stroke else 1.0 - stroke_score
 
-    conf_desc = "High Match" if probability >= 0.85 else "Moderate Match" if probability >= 0.65 else "Low Match"
-    confidence_label = f"{conf_desc} ({probability:.1%})"
+    confidence_label = f"Highest model score ({probability:.1%})"
 
     if is_stroke:
         status_badge = "Possible Stroke Pattern Flagged"
         status_level = "danger"
-        patient_headline = "Unusual brain tissue changes detected that require immediate doctor review."
+        patient_headline = "Unusual brain tissue changes detected — seek medical attention now."
         patient_explanation = (
             "The computer detected an area where brain tissue looks different than normal, which could indicate "
             "restricted blood flow (an ischemic stroke) or bleeding. Because brain tissue requires fast medical attention, "
             "this scan should be evaluated by an emergency doctor right away."
         )
+        plain_english = (
+            "A stroke happens when part of the brain doesn't get enough blood — either because a blood vessel is "
+            "blocked, or because it has burst. The AI found areas in this brain scan where the tissue looks "
+            "different from what it learned to recognise as normal. This could be a warning sign.\n\n"
+            "This is NOT a confirmed stroke diagnosis. The AI is looking at image patterns only — not running "
+            "blood tests, checking your blood pressure, or examining your symptoms. Only an emergency doctor "
+            "can confirm or rule out a stroke. If the person who had this scan is experiencing symptoms right now, "
+            "call emergency services immediately."
+        )
         common_causes = [
             "Acute blood clot or restricted blood flow (ischemic stroke)",
             "Localized brain tissue inflammation or swelling",
             "Bleeding (hemorrhagic episode) or transient ischemic event (TIA)",
+        ]
+        next_steps = [
+            "🚨 If symptoms are present NOW (drooping face, arm weakness, slurred speech, confusion) — call emergency services immediately",
+            "🏥 If no current symptoms: see a neurologist or emergency doctor today — do not wait",
+            "📁 Bring this scan and any previous brain scans to the appointment",
+            "🗣️ Tell the doctor exactly what symptoms were noticed and when they started",
+            "🚫 Do not drive yourself — have someone take you or call an ambulance",
         ]
         clinical_summary = (
             "The neural network detected visual density variations in the brain scan consistent with "
@@ -221,16 +409,30 @@ def stroke_response(raw_output: np.ndarray) -> PredictionResponse:
             "Consult an emergency neurologist or attending physician immediately. Correlate with physical symptoms."
         )
     else:
-        status_badge = "No Signs of Stroke Detected"
+        status_badge = "No Stroke Pattern Detected"
         status_level = "success"
-        patient_headline = "Brain tissue looks symmetric and normal in this scan slice."
+        patient_headline = "Brain tissue looks balanced and normal in this slice."
         patient_explanation = (
             "The computer examined both sides of the brain and found normal tissue balance with no obvious bleeding "
             "or blocked areas visible. Keep in mind that some minor or very early episodes might not show on a basic scan."
         )
+        plain_english = (
+            "A healthy brain scan looks roughly symmetrical — both sides should appear similar. The AI compared "
+            "your brain scan to the patterns it learned from, and didn't find signs that it associates with a stroke, "
+            "like dark patches from blocked blood flow or bright spots from bleeding.\n\n"
+            "This is a reassuring result — but it does not guarantee your brain is completely healthy. Very early "
+            "or very small changes might not be visible on a single slice. If you or someone you know experienced "
+            "any stroke symptoms, see a doctor regardless of this result."
+        )
         common_causes = [
             "Normal, healthy symmetric brain tissue",
             "No visible acute bleeding or ischemic damage in this slice",
+        ]
+        next_steps = [
+            "✅ No emergency signs detected — continue with your scheduled follow-up",
+            "📋 Know the FAST signs of a stroke: Face drooping, Arm weakness, Speech trouble, Time to call emergency services",
+            "🏥 If someone experienced symptoms earlier — still see a doctor, even if this scan looks normal",
+            "🧠 Regular check-ups with your doctor are the best way to monitor brain health",
         ]
         clinical_summary = (
             "The imaging pipeline did not observe visual indicators of acute cerebral infarction or hemorrhage in this scan."
@@ -253,10 +455,15 @@ def stroke_response(raw_output: np.ndarray) -> PredictionResponse:
         patient_headline=patient_headline,
         patient_explanation=patient_explanation,
         common_causes=common_causes,
+        plain_english=plain_english,
+        next_steps=next_steps,
     )
 
 
-def lung_response(raw_output: np.ndarray) -> PredictionResponse:
+
+def lung_response(
+    raw_output: np.ndarray, attention: AttentionAnalysis | None = None
+) -> PredictionResponse:
     scores = np.asarray(raw_output, dtype=np.float64).reshape(-1)
     if scores.size != len(LUNG_CLASS_NAMES):
         raise RuntimeError(f"Expected 3 lung outputs, received {scores.size}")
@@ -267,89 +474,142 @@ def lung_response(raw_output: np.ndarray) -> PredictionResponse:
         name: float(score) for name, score in zip(LUNG_CLASS_NAMES, scores)
     }
 
-    conf_desc = "High Match" if probability >= 0.85 else "Moderate Match" if probability >= 0.65 else "Low Match"
-    confidence_label = f"{conf_desc} ({probability:.1%})"
+    confidence_label = f"Highest model score ({probability:.1%})"
 
-    if best_index == 0:
-        status_badge = "Scan Appears Clear"
+    if prediction == "normal":
+        status_badge = "Research Output: Normal Pattern"
         status_level = "success"
-        patient_headline = "Clear Lung Tissue: No abnormal shadows or dense spots detected in this slice."
+        patient_headline = "No unusual patterns detected in this slice."
         patient_explanation = (
-            "Healthy lungs on a CT scan appear mostly dark because they are filled with air. In this slice, the computer "
-            "found uniform, open lung fields with normal branching blood vessels and no suspicious cloudy patches, "
-            "masses, or dense nodules. While a full checkup always considers your complete 3D scan series and symptoms, "
-            "this section shows standard healthy lung appearance."
+            "The model matched this CT slice to its normal class — the tissue patterns in this image "
+            "most closely resemble normal lung tissue from its training data.\n\n"
+            "This is a research prototype result, not a medical diagnosis. It evaluates only the "
+            "single image you uploaded — not your full CT study, symptoms, or medical history. "
+            "Only a radiologist reviewing your complete scan can determine whether your lungs are healthy."
+        )
+        plain_english = (
+            "A 'Normal' lung CT scan means the lungs appear clear and healthy. It indicates that the airways are open "
+            "and filled with air, and there are no signs of abnormal growths, severe inflammation, or fluid buildup. "
+            "The blood vessels and other structures in the chest look typical for a healthy person.\n\n"
+            "Keep in mind that while this slice looks clear, it is always important to have a qualified doctor "
+            "review your entire scan and medical history."
         )
         common_causes = [
-            "Normal, open air-filled lung spaces (alveoli)",
-            "Healthy airway and vascular structure without obstruction",
-            "Absence of detectable consolidated fluid, nodules, or masses",
-            "Good baseline scan appearance",
+            "This is a pattern-match score, not a clinical finding or health clearance",
+            "A full CT study has hundreds of slices — one slice result cannot represent them all",
+            "Only a radiologist can identify or rule out lung abnormalities",
+        ]
+        next_steps = [
+            "✅ Keep attending your regular health check-ups as scheduled",
+            "📋 If you have any symptoms (cough lasting 3+ weeks, breathlessness, chest pain, unexplained weight loss) — see a doctor regardless of this result",
+            "🏥 Share this result with your doctor — never use it alone to make any health decisions",
+            "📁 If a doctor ordered this scan, ensure they review all the images, not just this one",
         ]
         clinical_summary = (
-            "The automated screening shows predominantly uniform radiolucent lung field density with no dominant "
-            "nodular masses, consolidated opacities, or gross architectural distortion detected in this axial slice."
+            "Single-slice research classification: normal. "
+            "No localization, exclusion claim, or clinical validation is available from this output."
         )
         recommended_action = (
-            "Routine health maintenance. If you have lingering cough, shortness of breath, or chest discomfort, "
-            "always share your full imaging scan with your physician."
+            "Keep up with routine health check-ups. If you have symptoms such as a persistent cough, "
+            "breathlessness, or chest discomfort, share your full scan with a doctor — "
+            "do not rely on this tool alone."
         )
-    elif best_index == 1:
-        status_badge = "Doctor Review Recommended (Hazy Shadow Found)"
+    elif prediction == "benign":
+        status_badge = "Research Output: Benign Pattern"
         status_level = "warning"
-        patient_headline = "Mild Tissue Variation: A hazy or clouded patch was detected in the lung field."
+        patient_headline = "Patterns similar to benign (non-cancerous) tissue detected."
         patient_explanation = (
-            "The computer highlighted an area that looks hazier or thicker than the normal dark, air-filled lung tissue. "
-            "In radiology, this is often called 'ground-glass opacity' or localized infiltration.\n\n"
-            "⚠️ Please do NOT panic: This finding does NOT mean cancer. In the vast majority of patients, hazy lung patches "
-            "are temporary reactions caused by common, treatable conditions like a recent chest cold, seasonal flu, "
-            "minor inflammation, or harmless healing tissue. A doctor will review your full scan, listen to your breathing, "
-            "and determine if simple observation or antibiotics are appropriate."
+            "The model matched this CT slice to its benign class — the image patterns most resemble "
+            "non-cancerous tissue changes in its training data, such as scar tissue, inflammation, or "
+            "a benign nodule.\n\n"
+            "This result does not confirm or rule out disease. The model cannot locate, measure, or "
+            "characterize any finding. A doctor reviewing your full imaging study and medical history "
+            "is the only way to understand what this result means for you."
+        )
+        plain_english = (
+            "In medical terms, 'Benign' means a condition that is not cancer. A benign lung CT scan might show "
+            "harmless findings such as small nodules, old scar tissue from past infections, or mild inflammation. "
+            "These types of changes are very common, generally do not spread to other parts of the body, and often "
+            "do not require treatment.\n\n"
+            "However, you should still follow up with a doctor to properly evaluate these findings and ensure "
+            "they are truly harmless."
         )
         common_causes = [
-            "Recent viral or bacterial chest infection (bronchitis, mild pneumonia, chest cold)",
-            "Benign post-infection scarring from a past respiratory illness",
-            "Mild inflammation or small localized fluid retention",
-            "Airway irritation from smoke, dust, seasonal allergies, or acid reflux",
-            "Early tissue changes that your physician can easily monitor over time",
+            "Benign does not mean 'nothing to worry about' — a doctor must still evaluate it",
+            "The model cannot locate a nodule or measure its size — it only scores pattern similarity",
+            "Benign findings can include harmless scars, old infections, or small nodules",
+        ]
+        next_steps = [
+            "📞 Book an appointment with your regular doctor this week",
+            "📁 Bring your full CT scan files (a CD, USB, or digital copy of all images) — not just this one slice",
+            "🗣️ Tell your doctor about any symptoms: cough, chest tightness, shortness of breath, or unusual fatigue",
+            "🚫 Do not interpret this result on its own — a doctor's review is the only way to understand what it means for you",
         ]
         clinical_summary = (
-            "The model identified localized non-uniform attenuation (ground-glass/infiltrative pattern) in the lung field "
-            "differing from uniform radiolucency. Non-malignant etiologies (infectious, post-inflammatory, or interstitial) "
-            "frequently exhibit this presentation. Clinical and radiological correlation is advised."
+            "Single-slice research classification: benign. "
+            "The classifier provides no localization, size estimate, or clinical diagnosis."
         )
         recommended_action = (
-            "Schedule a standard doctor's consultation. Bring your scan files or CD so your doctor can evaluate this "
-            "finding alongside your symptoms, medical history, and stethoscope exam."
+            "See a doctor and bring your full scan files or CD. They can evaluate this finding "
+            "alongside your symptoms and medical history. Do not interpret this result on its own."
+        )
+    elif prediction == "malignant":
+        status_badge = "Research Output: Malignant Pattern"
+        status_level = "danger"
+        patient_headline = "Patterns similar to malignant tissue detected — please see a doctor."
+        patient_explanation = (
+            "The model matched this CT slice to its malignant class — the image patterns most resemble "
+            "tissue marked as malignant in its training data.\n\n"
+            "This is NOT a cancer diagnosis. The model cannot locate a tumor, measure its size, or "
+            "confirm cancer is present. It only compares image patterns. Many factors — including scan "
+            "quality, positioning, metal implants, or other artifacts — can produce this result even "
+            "when no cancer is present. A radiologist must review your complete scan."
+        )
+        plain_english = (
+            "'Malignant' is the medical term for cancerous. A malignant pattern on a lung CT scan suggests the "
+            "presence of abnormal tissue or growths that have the potential to grow aggressively and spread. "
+            "This often points to a tumor or other cancerous cells that need immediate medical attention and treatment.\n\n"
+            "It is highly important not to panic, but you must take this seriously. A radiologist needs to look at "
+            "your full scan to confirm exactly what is going on and guide your next steps."
+        )
+        common_causes = [
+            "This is a pattern-similarity score — it cannot confirm or locate cancer",
+            "Metal implants, dense tissue, or scan artifacts can trigger this class",
+            "Only a radiologist + full DICOM study + clinical history can give a real diagnosis",
+        ]
+        next_steps = [
+            "🏥 See a doctor as soon as possible — ideally within the next few days",
+            "📁 Bring your complete CT scan files (all slices, not just this image) to the appointment",
+            "🗣️ Tell your doctor about any symptoms: new cough, unexplained weight loss, chest pain, or fatigue",
+            "🧘 Try not to panic — many things besides cancer can cause this result. A doctor's review will clarify everything",
+            "📞 If you can't get a quick appointment, call your doctor's office and mention you have an imaging result you'd like reviewed",
+        ]
+        clinical_summary = (
+            "Single-slice research classification: malignant. "
+            "This output is not localized, not clinically validated, and not a diagnosis."
+        )
+        recommended_action = (
+            "Book an appointment with a pulmonologist or your doctor as soon as possible. "
+            "Bring your full scan files. They will review all slices and your clinical history "
+            "to determine whether follow-up or further testing is needed."
         )
     else:
-        status_badge = "Doctor Evaluation Advised (Dense Spot Found)"
-        status_level = "danger"
-        patient_headline = "Focal Density Detected: A concentrated white spot or nodule was identified."
+        status_badge = f"Unmapped Research Output: {prediction}"
+        status_level = "info"
+        patient_headline = "This recovered model's class meaning is unknown."
         patient_explanation = (
-            "The computer detected a distinct, concentrated white spot (often called a 'pulmonary nodule') in this slice "
-            "that is denser than surrounding lung air space.\n\n"
-            "⚠️ What this means for you: Lung spots are extremely common—up to half of all adults who get a CT scan have "
-            "one or more nodules. More than 90% of small lung nodules turn out to be completely non-cancerous (benign), "
-            "frequently representing old healed scars, small lymph nodes, or past minor infections. Because nodules cannot "
-            "be fully diagnosed by AI alone, a pulmonologist or radiologist must examine the spot's exact borders, size, "
-            "and density to recommend the right follow-up."
+            "The model produced a numeric class, but its original training dataset and class-index mapping "
+            "are unavailable. Assigning a medical meaning to this result would be misleading."
         )
-        common_causes = [
-            "Benign (harmless) pulmonary nodule or hamartoma",
-            "Calcified granuloma or scar tissue from a past healed infection",
-            "Active or resolving focal lung infection",
-            "Intrapulmonary lymph node reacting to normal environmental dust",
-            "Tissue change requiring clinical correlation and possible follow-up scan",
-        ]
+        plain_english = ""
+        common_causes = []
+        next_steps = []
         clinical_summary = (
-            "The model flagged concentrated structural opacity or focal nodular morphology in this slice. "
-            "Differential diagnosis includes granulomatous disease, healed infection, benign hamartoma, or focal lesion. "
-            "Formal radiologic review with prior comparison scans is strongly recommended."
+            "Neutral legacy-model output only. No clinical interpretation is available without verified class metadata."
         )
         recommended_action = (
-            "Arrange an appointment with a pulmonologist or attending physician. They can compare this scan with any "
-            "earlier scans you have had or schedule a clear follow-up check."
+            "Do not use this output for a health decision. Use the reproducibly trained model with its metadata, "
+            "and consult a qualified clinician for interpretation of medical imaging."
         )
 
     return PredictionResponse(
@@ -366,7 +626,15 @@ def lung_response(raw_output: np.ndarray) -> PredictionResponse:
         patient_headline=patient_headline,
         patient_explanation=patient_explanation,
         common_causes=common_causes,
+        plain_english=plain_english,
+        next_steps=next_steps,
+        warning=(
+            "⚠️ Research tool only — not a medical device. This result is not a diagnosis, "
+            "does not replace a radiologist, and must not be used for clinical decisions."
+        ),
+        attention=attention,
     )
+
 
 
 @app.post("/predict", response_model=PredictionResponse)
@@ -385,7 +653,11 @@ async def predict(
 
     model = models.get(normalized_type)
     if model is None:
-        missing_filename = "brain_stroke.keras" if normalized_type == "stroke" else "lung_cancer.keras"
+        missing_filename = (
+            "brain_stroke.keras"
+            if normalized_type == "stroke"
+            else LUNG_MODEL_PATH.name
+        )
         raise HTTPException(
             status_code=503,
             detail=(
@@ -397,11 +669,18 @@ async def predict(
     raw_output = await run_in_threadpool(
         model.predict, image_batch, verbose=0  # type: ignore[attr-defined]
     )
-    return (
-        stroke_response(raw_output)
-        if normalized_type == "stroke"
-        else lung_response(raw_output)
-    )
+    if normalized_type == "stroke":
+        return stroke_response(raw_output)
+
+    attention = None
+    try:
+        class_index = int(np.argmax(np.asarray(raw_output).reshape(-1)))
+        attention = await run_in_threadpool(
+            build_lung_attention, model, image_batch, contents, class_index
+        )
+    except Exception as exc:
+        print(f"[Warning] Lung attention map unavailable: {exc}")
+    return lung_response(raw_output, attention)
 
 
 if __name__ == "__main__":

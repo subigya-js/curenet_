@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "model_name": "curenet_lung_ct_classifier",
+  "task": "single_slice_lung_ct_classification",
+  "class_names": [
+    "normal",
+    "benign",
+    "malignant"
+  ],
+  "input_shape": [
+    224,
+    224,
+    3
+  ],
+  "input_value_range": [
+    0.0,
+    1.0
+  ],
+  "dataset": {
+    "name": "IQ-OTH/NCCD lung cancer dataset",
+    "doi": "10.17632/bhmdr45bh2.4",
+    "license": "CC BY 4.0",
+    "split_strategy": "deterministic_stratified_slice_level",
+    "split_counts": {
+      "train": {
+        "benign": 84,
+        "malignant": 393,
+        "normal": 292
+      },
+      "validation": {
+        "benign": 18,
+        "malignant": 84,
+        "normal": 62
+      },
+      "test": {
+        "benign": 18,
+        "malignant": 84,
+        "normal": 62
+      }
+    },
+    "manifest_sha256": "91b00d704b644d9f027cac8d17981534c2fc780d77cd396696161905fef318dc"
+  },
+  "training": {
+    "seed": 42,
+    "base_epochs_requested": 15,
+    "fine_tune_epochs_requested": 10,
+    "batch_size": 16,
+    "backbone": "MobileNetV2",
+    "imagenet_initialization": true
+  },
+  "evaluation": {
+    "accuracy": 0.9085365853658537,
+    "balanced_accuracy": 0.8724185014507594,
+    "macro_f1": 0.857852824682093,
+    "per_class": {
+      "normal": {
+        "precision": 0.873015873015873,
+        "recall_sensitivity": 0.8870967741935484,
+        "f1": 0.88,
+        "support": 62
+      },
+      "benign": {
+        "precision": 0.6666666666666666,
+        "recall_sensitivity": 0.7777777777777778,
+        "f1": 0.717948717948718,
+        "support": 18
+      },
+      "malignant": {
+        "precision": 1.0,
+        "recall_sensitivity": 0.9523809523809523,
+        "f1": 0.975609756097561,
+        "support": 84
+      }
+    },
+    "confusion_matrix": [
+      [
+        55,
+        7,
+        0
+      ],
+      [
+        4,
+        14,
+        0
+      ],
+      [
+        4,
+        0,
+        80
+      ]
+    ],
+    "confusion_matrix_labels": [
+      "normal",
+      "benign",
+      "malignant"
+    ],
+    "sample_count": 164,
+    "evaluation_scope": "held_out_slice_level",
+    "dataset_doi": "10.17632/bhmdr45bh2.4",
+    "manifest_sha256": "91b00d704b644d9f027cac8d17981534c2fc780d77cd396696161905fef318dc",
+    "selected_validation_loss": 0.21810883283615112,
+    "selected_training_stage": "fine_tuned_candidate"
+  },
+  "limitations": [
+    "Research and education only; not a medical device or diagnosis.",
+    "The public dataset lacks patient identifiers, so patient-level separation cannot be verified.",
+    "The dataset is small, class-imbalanced, and collected at a limited number of Iraqi centers.",
+    "This model evaluates a single exported CT slice, not a complete DICOM study.",
+    "External and prospective clinical validation have not been performed."
+  ],
+  "created_at": "2026-09-10T14:06:07.796875+00:00",
+  "tensorflow_version": "2.19.1",
+  "source_git_commit": "09fac28e289814032517aeb332f76cd5625ccf37"
+}

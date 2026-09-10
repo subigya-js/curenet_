@@ -7,7 +7,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon server.js",
     "ml:start": "cd ml_service && .venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000",
-    "ml:dev": "cd ml_service && .venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000 --reload"
+    "ml:dev": "cd ml_service && .venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000 --reload",
+    "ml:download:lung": "cd ml_service && .venv/bin/python download_lung_dataset.py",
+    "ml:train:lung": "cd ml_service && .venv/bin/python train_lung.py"
   },
   "keywords": [],
   "author": "",

@@ -1,0 +1,22 @@
+{
+  "split_strategy": "deterministic_stratified_slice_level",
+  "manifest_sha256": "91b00d704b644d9f027cac8d17981534c2fc780d77cd396696161905fef318dc",
+  "counts": {
+    "train": {
+      "benign": 84,
+      "malignant": 393,
+      "normal": 292
+    },
+    "validation": {
+      "benign": 18,
+      "malignant": 84,
+      "normal": 62
+    },
+    "test": {
+      "benign": 18,
+      "malignant": 84,
+      "normal": 62
+    }
+  },
+  "limitation": "The public IQ-OTH/NCCD release has no patient identifiers. Slices from one patient may cross splits, so this evaluation must not be described as patient-level or clinical validation."
+}

@@ -1,0 +1,53 @@
+{
+  "accuracy": 0.9085365853658537,
+  "balanced_accuracy": 0.8724185014507594,
+  "macro_f1": 0.857852824682093,
+  "per_class": {
+    "normal": {
+      "precision": 0.873015873015873,
+      "recall_sensitivity": 0.8870967741935484,
+      "f1": 0.88,
+      "support": 62
+    },
+    "benign": {
+      "precision": 0.6666666666666666,
+      "recall_sensitivity": 0.7777777777777778,
+      "f1": 0.717948717948718,
+      "support": 18
+    },
+    "malignant": {
+      "precision": 1.0,
+      "recall_sensitivity": 0.9523809523809523,
+      "f1": 0.975609756097561,
+      "support": 84
+    }
+  },
+  "confusion_matrix": [
+    [
+      55,
+      7,
+      0
+    ],
+    [
+      4,
+      14,
+      0
+    ],
+    [
+      4,
+      0,
+      80
+    ]
+  ],
+  "confusion_matrix_labels": [
+    "normal",
+    "benign",
+    "malignant"
+  ],
+  "sample_count": 164,
+  "evaluation_scope": "held_out_slice_level",
+  "dataset_doi": "10.17632/bhmdr45bh2.4",
+  "manifest_sha256": "91b00d704b644d9f027cac8d17981534c2fc780d77cd396696161905fef318dc",
+  "selected_validation_loss": 0.21810883283615112,
+  "selected_training_stage": "fine_tuned_candidate"
+}
