@@ -1,0 +1,13 @@
+.DS_Store
+.env
+__pycache__/
+.pytest_cache/
+*.py[cod]
+.venv/
+
+# The recovered brain model is approximately 255 MB and is distributed via the
+# Kaggle link in README.md rather than Git.
+backend/models/brain_stroke.keras
+
+# Runtime uploads may contain sensitive images.
+backend/uploads/

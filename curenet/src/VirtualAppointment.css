@@ -1,0 +1,261 @@
+/* Main container */
+.virtual-appointment-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0F172A;
+    padding: 2rem;
+}
+
+.appointment-panel {
+    display: flex;
+    width: 100%;
+    max-width: 1400px;
+    min-height: 80vh;
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+/* Left panel */
+.left-panel {
+    flex: 0.8;
+    background: #1A56DB;
+    padding: 3rem;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+
+.info-content h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    color: #FFFFFF;
+}
+
+.info-content > p {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 3rem;
+    line-height: 1.6;
+}
+
+.feature-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.feature-item {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 1.25rem;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    transition: all 0.3s ease;
+}
+
+/* Right panel */
+.right-panel {
+    flex: 1.2;
+    padding: 3rem;
+    background: #0F172A;
+    overflow-y: auto;
+}
+
+/* Form styling */
+.form-container {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.form-header {
+    margin-bottom: 2.5rem;
+}
+
+.form-header h2 {
+    font-size: 1.75rem;
+    color: #FFFFFF;
+    margin-bottom: 0.5rem;
+}
+
+.form-header p {
+    color: #94A3B8;
+    font-size: 0.9rem;
+}
+
+.virtual-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.form-group label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #94A3B8;
+    font-size: 0.875rem;
+}
+
+/* Input styling */
+.form-group input,
+.textarea-field {
+    width: 100%;
+    padding: 0.75rem;
+    background: rgba(26, 26, 26, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 20px;
+    color: #FFFFFF;
+    font-size: 0.875rem;
+    transition: all 0.3s ease;
+    height: 42px;
+}
+
+.textarea-field {
+    min-height: 100px;
+    min-width: 350px;
+    padding-left: 20px;
+    padding-right: 50px;
+    resize: none;
+    height: auto;
+    font-family: inherit;
+}
+
+.form-group input::placeholder,
+.textarea-field::placeholder {
+    color: #64748B;
+    font-size: 0.875rem;
+}
+
+/* Button styling */
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.cancel-button,
+.submit-button {
+    padding: 30px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 200px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cancel-button {
+    background: #FFFFFF;
+    color: #000000;
+}
+
+.submit-button {
+    background: #1A56DB;
+    color: #FFFFFF;
+}
+
+/* Date and time inputs */
+input[type="date"],
+input[type="time"] {
+    appearance: none;
+    -webkit-appearance: none;
+    background: rgba(26, 26, 26, 0.8);
+    cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    opacity: 0.7;
+}
+
+/* Error states */
+.error {
+    border-color: #EF4444 !important;
+}
+
+.error-text {
+    color: #EF4444;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+.error-alert {
+    background: rgba(239, 68, 68, 0.1);
+    border-left: 4px solid #EF4444;
+    color: #EF4444;
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+/* Responsive design */
+@media (max-width: 1024px) {
+    .appointment-panel {
+        flex-direction: column;
+        min-height: auto;
+        max-width: 800px;
+    }
+
+    .left-panel,
+    .right-panel {
+        padding: 2rem;
+    }
+
+    .form-container {
+        padding: 0;
+    }
+}
+
+@media (max-width: 640px) {
+    .virtual-appointment-container {
+        padding: 1rem;
+    }
+
+    .appointment-panel {
+        border-radius: 16px;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .form-actions {
+        flex-direction: column;
+    }
+
+    .cancel-button,
+    .submit-button {
+        width: 100%;
+    }
+} 

@@ -1,0 +1,176 @@
+.selection-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e8eb 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.selection-content {
+    max-width: 1200px;
+    width: 100%;
+}
+
+.logo-section {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.logo-section h1 {
+    color: #28a745;
+    font-size: 3rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.tagline {
+    color: #6c757d;
+    font-size: 1.2rem;
+    margin: 0;
+}
+
+.cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+    padding: 20px;
+}
+
+.role-card {
+    background: white;
+    border-radius: 15px;
+    padding: 30px;
+    text-align: center;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.role-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+}
+
+.role-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 20px;
+    background: #28a745;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.role-icon svg {
+    width: 40px;
+    height: 40px;
+}
+
+.role-card h2 {
+    color: #343a40;
+    font-size: 1.5rem;
+    margin-bottom: 15px;
+    font-weight: 600;
+}
+
+.role-card p {
+    color: #6c757d;
+    font-size: 1rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* Role-specific styles */
+.patient-icon {
+    background: #28a745;
+}
+
+.doctor-icon {
+    background: #17a2b8;
+}
+
+.admin-icon {
+    background: #6f42c1;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .selection-content {
+        padding: 20px;
+    }
+
+    .logo-section h1 {
+        font-size: 2.5rem;
+    }
+
+    .cards-container {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
+    .role-card {
+        padding: 20px;
+    }
+}
+
+/* Animation */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.role-card {
+    animation: fadeIn 0.5s ease-out forwards;
+}
+
+.role-card:nth-child(2) {
+    animation-delay: 0.1s;
+}
+
+.role-card:nth-child(3) {
+    animation-delay: 0.2s;
+}
+
+/* Accessibility */
+.role-card:focus {
+    outline: 3px solid #28a745;
+    outline-offset: 2px;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .selection-container {
+        background: linear-gradient(135deg, #2d3436 0%, #1a1d1e 100%);
+    }
+
+    .role-card {
+        background: #2d3436;
+    }
+
+    .role-card h2 {
+        color: #f8f9fa;
+    }
+
+    .role-card p {
+        color: #adb5bd;
+    }
+
+    .logo-section h1 {
+        color: #28a745;
+    }
+
+    .tagline {
+        color: #adb5bd;
+    }
+}

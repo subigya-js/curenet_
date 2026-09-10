@@ -1,0 +1,251 @@
+/* Main Container */
+.dashboard-container {
+    min-height: 100vh;
+    background-color: #f8fafc;
+    padding: 2rem;
+}
+
+/* Navigation Bar */
+.dashboard-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    background-color: white;
+    margin-bottom: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.nav-brand {
+    display: flex;
+    align-items: center;
+}
+
+.nav-brand h2 {
+    color: #16a34a;
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.logout-button {
+    padding: 0.5rem 1rem;
+    background-color: #dc2626;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.logout-btn:hover {
+    background-color: #b91c1c;
+}
+
+/* Quick Actions Section */
+.quick-actions{
+    display: flex;
+    flex-direction: column;
+}
+
+.section-header h2{
+    margin-top: 20px;
+}
+.section-title {
+    color: #1f2937;
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+}
+
+.cards-grid {
+    /* display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem; */
+    display: flex;
+    gap: 15px;
+}
+
+.action-card {
+    background-color: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.action-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.card-icon {
+    width: 40px;
+    height: 40px;
+    background-color: #f0fdf4;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-icon svg {
+    width: 20px;
+    height: 20px;
+    color: #16a34a;
+}
+
+.card-content h3 {
+    color: #1f2937;
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem 0;
+}
+
+.card-content p {
+    color: #6b7280;
+    font-size: 0.875rem;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Health Assistant Card */
+.health-assistant .card-icon {
+    background-color: #ecfdf5;
+}
+
+.health-assistant .card-icon svg {
+    color: #059669;
+}
+
+/* Text Consultation Card */
+.text-consultation .card-icon {
+    background-color: #f0f9ff;
+}
+
+.text-consultation .card-icon svg {
+    color: #0284c7;
+}
+
+/* Virtual Consultation Card */
+.virtual-consultation .card-icon {
+    background-color: #eff6ff;
+}
+
+.virtual-consultation .card-icon svg {
+    color: #2563eb;
+}
+
+/* Profile Card */
+.profile-card .card-icon {
+    background-color: #faf5ff;
+}
+
+.profile-card .card-icon svg {
+    color: #7c3aed;
+}
+
+/* Loading State */
+.loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #e5e7eb;
+    border-top-color: #16a34a;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Error State */
+.error-state {
+    text-align: center;
+    padding: 2rem;
+    background-color: #fef2f2;
+    border-radius: 12px;
+    color: #dc2626;
+}
+
+.error-state button {
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    background-color: #dc2626;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .dashboard-container {
+        padding: 1rem;
+    }
+
+    .dashboard-nav {
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .cards-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .action-card {
+        padding: 1.25rem;
+    }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+    .dashboard-container {
+        background-color: #1a1a1a;
+    }
+
+    .dashboard-nav,
+    .action-card {
+        /* max-width: 300px; */
+        border-color: #404040;
+    }
+
+    .action-card{
+        max-width: 300px;
+    }
+
+    .section-title,
+    .card-content h3 {
+        color: #e5e7eb;
+    }
+
+    .card-content p {
+        color: #9ca3af;
+    }
+
+    .nav-brand h2 {
+        color: #22c55e;
+    }
+}
