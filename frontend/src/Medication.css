@@ -1,0 +1,95 @@
+.medication-container {
+    padding: 2rem;
+    max-width: 800px;
+    margin: 0 auto;
+    min-height: 100vh;
+    background-color: #121212; /* Dark background */
+    color: #e0e0e0; /* Light text for readability */
+  }
+  
+  .medication-card {
+    background-color: #1e1e1e; /* Slightly lighter dark color for contrast */
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); /* Adjust shadow for dark theme */
+  }
+  
+  .patient-details {
+    background-color: #242424; /* Dark background for patient details */
+    padding: 1.5rem;
+    border-radius: 4px;
+    margin: 1.5rem 0;
+    color: #e0e0e0; /* Ensure text is readable */
+  }
+  
+  .diagnosis-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .form-group label {
+    font-weight: 600;
+    color: #e0e0e0; /* Light color for labels */
+  }
+  
+  .form-group textarea {
+    padding: 0.75rem;
+    border: 1px solid #444; /* Dark border */
+    background-color: #1e1e1e; /* Dark background for textarea */
+    color: #e0e0e0; /* Light text */
+    border-radius: 4px;
+    min-height: 100px;
+    resize: vertical;
+  }
+  
+  .button-group {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 1rem;
+  }
+  
+  .back-button {
+    padding: 0.75rem 1.5rem;
+    background-color: #444; /* Neutral dark color for buttons */
+    color: #e0e0e0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  
+  .submit-button {
+    padding: 0.75rem 1.5rem;
+    background-color: #28a745; /* Bright green for emphasis */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  
+  .submit-button:disabled {
+    background-color: #555; /* Disabled button color */
+    cursor: not-allowed;
+  }
+  
+  .error-message {
+    color: #f8d7da;
+    padding: 1rem;
+    background-color: #721c24; /* Dark red background for errors */
+    border-radius: 4px;
+    margin-bottom: 1rem;
+  }
+  
+  .loading-spinner {
+    text-align: center;
+    padding: 2rem;
+    color: #ccc; /* Neutral light color for spinner text */
+  }
+  

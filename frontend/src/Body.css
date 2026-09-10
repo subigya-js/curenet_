@@ -1,0 +1,55 @@
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.form-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh; /* Full height to cover the screen */
+    background-color: #24282c; /* Dark background */
+    overflow-y: auto; /* Allows scrolling if content exceeds viewport */
+}
+
+.form-box {
+    background-color: #24282c;
+    padding: 2rem; /* Padding around the form */
+    border-radius: 0.5rem;
+    width: 80%; /* Set the width to 70% of the page */
+    max-width: 1200px; /* Optional: limit maximum width for larger screens */
+    box-sizing: border-box;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.2); /* Shadow for depth */
+}
+
+.chatbox {
+    height: 70%; /* Space for the chat output */
+    border: 1px solid #ced4da; /* Border around the chat area */
+    background-color: #f8f9fa; /* Light background for chat */
+    padding: 1rem; /* Padding inside the chat area */
+    border-radius: 0.5rem; /* Rounded corners */
+    overflow-y: auto; /* Allows scrolling if chat content exceeds area */
+    color: #212529; /* Text color */
+}
+
+.input-form {
+    display: flex;
+    flex-direction: column;
+}
+
+textarea {
+    min-height: 200px; /* Minimum height for textarea */
+    max-height: 300px; /* Maximum height for textarea */
+    width: 90%; /* Full width for textarea */
+    padding: 0.5rem; /* Padding inside the textarea */
+    border: 1px solid #ced4da; /* Border style */
+    border-radius: 0.25rem; /* Rounded corners */
+    resize: none; /* Prevent resizing */
+    background-color: #f8f9fa; /* Light background for the input */
+    color: #212529; /* Text color */
+}
+
+.btn {
+    margin-top: 1rem; /* Space between textarea and button */
+}

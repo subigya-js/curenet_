@@ -1,0 +1,300 @@
+
+
+.patient-history-container {
+    min-height: 100vh;
+    background: #f0f2f5; /* Light gray background */
+    padding: 2rem;
+    color: #2c3e50; /* Dark blue-gray text */
+  }
+  
+  .history-panel {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+  }
+  
+  .search-section {
+    padding: 2.5rem;
+    background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%); /* Professional gradient */
+  }
+  
+  .search-section h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+    color: white;
+    font-weight: 600;
+  }
+  
+  .search-section p {
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 2rem;
+    font-size: 1.1rem;
+  }
+  
+  .search-form {
+    display: flex;
+    gap: 1rem;
+    max-width: 600px;
+  }
+  
+  .search-form input {
+    flex: 1;
+    padding: 1rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #2c3e50;
+    font-size: 1rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+  }
+  
+  .search-form input:focus {
+    outline: none;
+    background: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  
+  .search-form input::placeholder {
+    color: #95a5a6;
+  }
+  
+  .search-form button {
+    padding: 1rem 2rem;
+    border: none;
+    border-radius: 8px;
+    background: #e74c3c; /* Bright accent color */
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 6px rgba(231, 76, 60, 0.3);
+  }
+  
+  .search-form button:hover {
+    background: #c0392b;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
+  }
+  
+  .search-form button:disabled {
+    background: #95a5a6;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  
+  .error-message {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: rgba(231, 76, 60, 0.1);
+    border-left: 4px solid #e74c3c;
+    border-radius: 4px;
+    color: #c0392b;
+  }
+  
+  .history-section {
+    padding: 20px;
+    background: #f8fafc;
+  }
+  
+  .history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #eee;
+  }
+  
+  .history-header h2 {
+    color: #2c3e50;
+    font-weight: 600;
+  }
+  
+  .record-count {
+    color: #7f8c8d;
+    background: #ecf0f1;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.9rem;
+  }
+  
+  .history-cards {
+    display: grid;
+    gap: 1.5rem;
+  }
+  
+  .history-card {
+    padding: 15px;
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    border: 1px solid #e1e8ed;
+    transition: transform 0.3s ease;
+  }
+  
+  .history-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  }
+  
+  .card-header {
+    padding: 8px;
+    background: #f8fafc;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #e1e8ed;
+  }
+  
+  .appointment-date .date {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #2c3e50;
+  }
+  
+  .appointment-date .time {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+  }
+  
+  .appointment-type {
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    text-transform: capitalize;
+    font-weight: 500;
+  }
+  
+  .appointment-type.text {
+    background: rgba(52, 152, 219, 0.1);
+    color: #2980b9;
+  }
+  
+  .appointment-type.virtual {
+    background: rgba(46, 204, 113, 0.1);
+    color: #27ae60;
+  }
+  
+  .card-content {
+    padding: 1.5rem;
+  }
+  
+  .content-section {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid #eee;
+  }
+  
+  .content-section:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+  
+  .content-section h4 {
+    color: #34495e;
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  
+  .content-section p {
+    color: #7f8c8d;
+    line-height: 1.6;
+  }
+  
+  .card-footer {
+    padding: 8px;
+    background: #f8fafc;
+    border-top: 1px solid #e1e8ed;
+  }
+  
+  .status {
+    text-transform: capitalize;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  
+  .status.diagnosed {
+    color: #27ae60;
+  }
+  
+  .status.booked {
+    color: #2980b9;
+  }
+  
+  .status.cancelled {
+    color: #e74c3c;
+  }
+  
+  .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid white;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .patient-history-container {
+      padding: 1rem;
+    }
+  
+    .search-form {
+      flex-direction: column;
+    }
+  
+    .search-section {
+      padding: 1.5rem;
+    }
+  
+    .search-section h1 {
+      font-size: 2rem;
+    }
+  
+    .card-header {
+      padding: 8px
+      ;
+      flex-direction: column;
+      gap: 1rem;
+      text-align: center;
+    }
+  
+    .history-card {
+      padding: 8px;
+      margin: 0 -1rem;
+      border-radius: 0;
+    }
+  }
+  
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: #bdc3c7;
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: #95a5a6;
+  }

@@ -6,11 +6,16 @@ __pycache__/
 .venv/
 
 # Trained artifacts and datasets are reproducible outputs, not source files.
-backend/ml_service/models/brain_stroke.keras
-backend/ml_service/models/lung_cancer_retrained.keras
-backend/ml_service/data/
-backend/ml_service/reports/**/*.keras
-backend/ml_service/reports/**/*.training.csv
+ml_services/models/brain_stroke.keras
+ml_services/models/lung_cancer_retrained.keras
+ml_services/data/
+ml_services/reports/**/*.keras
+ml_services/reports/**/*.training.csv
 
 # Runtime uploads may contain sensitive images.
-backend/uploads/
+api/uploads/
+
+# Node environments
+node_modules/
+build/
+dist/

@@ -1,97 +1,113 @@
-# CureNet AHMS
+# CureNet 🏥
 
-CureNet is an undergraduate healthcare-management web application with separate
-Node/Express application services and a Python/FastAPI medical-imaging research
-service.
+CureNet is a comprehensive, AI-powered medical platform designed to bridge the gap between advanced medical research tools and accessible patient care. It provides an intuitive interface for both clinicians and patients, offering features ranging from AI-assisted diagnostic imaging (like Lung CT scans) to virtual appointments, chatbots, and electronic health records.
 
-> Research use only: imaging model outputs are not diagnoses and must not replace
-> evaluation by a qualified clinician.
+## 🏗️ Architecture & Structure
 
-## Repository layout
+The repository is organized into three completely independent services, allowing for clean separation of concerns and scalable development:
 
-```text
-curenet/                    React frontend
-backend/                    Node/Express API and database layer
-backend/ml_service/         FastAPI inference and ML training code
-  models/                   Keras artifacts and model metadata
-  training/                 Dataset, model, and metric modules
-  tests/                    Inference-contract and training tests
-  reports/lung/             Reproducibility manifests and evaluation
+```
+curenet_/
+├── frontend/     # React.js application (User Interface)
+├── api/          # Node.js / Express backend (Database & Business Logic)
+└── ml_services/  # Python / FastAPI backend (AI & Machine Learning Inference)
 ```
 
-## Run the web application
+---
 
-Install the frontend and backend dependencies in their respective directories.
-Configure `backend/.env` from `backend/.env.example`, including the local MySQL
-credentials expected by the Node service.
+## 1️⃣ Frontend (React App)
+The frontend is a robust Single Page Application built with **React.js**. It features a modern, dark-themed, glassmorphic UI designed to look highly professional for clinicians while remaining accessible to regular users.
 
+- **Port**: `http://localhost:3000`
+- **Key Tech**: React Router, Axios, Bootstrap, Custom Vanilla CSS
+- **Features**:
+  - **Dual Dashboards**: Separate views for Patients and Doctors/Admins.
+  - **Laboratory / Diagnostics**: Upload medical scans (like Lung CTs) for instant AI screening. Results are displayed with plain English explanations, numbered next steps, Grad-CAM metrics, and clinical summaries.
+  - **Appointments**: Schedule and view text or virtual appointments.
+  - **AI Chatbot**: Built-in chatbot for answering quick medical queries.
+
+### Setup & Run (Frontend)
 ```bash
-cd curenet
+cd frontend
 npm install
-npm start
+npm run start
 ```
 
-In another terminal:
+---
 
+## 2️⃣ API (Node.js/Express)
+The core backend handles all the standard application logic, database operations, user authentication, and serves as a bridge for the chatbot.
+
+- **Port**: `http://localhost:8801`
+- **Key Tech**: Node.js, Express, MySQL (mysql2), Express-Session, Multer (for file uploads)
+- **Database**: Connects to a MySQL database named `curenet` on port `3306`.
+- **Features**:
+  - Secure authentication and session management for Patients, Doctors, and Admins.
+  - CRUD operations for medical history, appointments, and hospital tables.
+  - Intermediary routing (routes queries to the Python ML services when AI is needed).
+
+### Setup & Run (API)
+Ensure you have a local MySQL instance running with a database named `curenet`. Configure your `.env` file based on `.env.example`.
 ```bash
-cd backend
+cd api
 npm install
-npm start
+npm run start    # Starts with nodemon for hot-reloading
 ```
 
-## Train and run the lung ML service
+---
 
-Python 3.11 is the supported setup. From the repository root:
+## 3️⃣ ML Services (Python/FastAPI)
+The machine learning microservice is dedicated entirely to heavy computational tasks, deep learning inference, and NLP processing. 
 
+- **Port**: `http://127.0.0.1:8000`
+- **Key Tech**: Python 3.11+, FastAPI, Uvicorn, TensorFlow/Keras, OpenCV, Numpy
+- **Features**:
+  - **Lung Cancer CT Screening**: Uses a retrained deep learning model to classify CT slices into Normal, Benign, or Malignant.
+  - **Grad-CAM Attention Maps**: Generates visual heatmaps (attention overlays) explaining exactly which parts of a scan influenced the AI's decision.
+  - **Medical Chatbot Backend**: Processes NLP queries (e.g., via `recommend.py`).
+  - **Training Pipelines**: Includes scripts like `train_lung.py` and `download_lung_dataset.py` to fetch data from Kaggle and train/retrain the models locally.
+
+### Setup & Run (ML Services)
+It is highly recommended to use a virtual environment to avoid dependency conflicts.
 ```bash
-cd backend/ml_service
+cd ml_services
 python3.11 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate       # On Mac/Linux
+# .venv\Scripts\activate        # On Windows
+
+# Install dependencies
+pip install -r requirements.txt
+# (Optional) Install training dependencies if you want to train models
 pip install -r requirements-train.txt
-python download_lung_dataset.py
-python train_lung.py
+
+# Start the inference server
+uvicorn app:app --host 127.0.0.1 --port 8000 --reload
+```
+
+---
+
+## 🚀 Quick Start (Running Everything Locally)
+
+To get the entire stack running at once, you will need **three separate terminal windows**.
+
+**Terminal 1 (Database & API)**
+```bash
+cd api
+npm run start
+```
+
+**Terminal 2 (AI/ML Backend)**
+```bash
+cd ml_services
+source .venv/bin/activate
 uvicorn app:app --host 127.0.0.1 --port 8000
 ```
 
-The training command creates `models/lung_cancer_retrained.keras`. When that
-file exists, the service prefers it over the recovered legacy artifact and reads
-its adjacent metadata for the verified `normal`, `benign`, and `malignant` label
-order. Override the choice with `CURENET_LUNG_MODEL_PATH` when necessary.
-
-For lung predictions, the service runs Grad-CAM layer-by-layer across the
-MobileNetV2 feature extractor and returns an attention overlay along with
-activation area percentage, peak coordinates, and all three class scores.
-Grad-CAM shows classifier attention; it is not lesion segmentation or cancer
-localization.
-
-The model binary and dataset are ignored by Git because they are reproducible
-and large. The split manifest, summary, model metadata, and test metrics remain
-versionable evidence. See
-[`backend/ml_service/TRAINING.md`](backend/ml_service/TRAINING.md) for the exact
-workflow and [`backend/ml_service/MODEL_CARD.md`](backend/ml_service/MODEL_CARD.md)
-for results and limitations.
-
-## Verify the ML code
-
+**Terminal 3 (User Interface)**
 ```bash
-cd backend/ml_service
-.venv/bin/python -m pytest -q
+cd frontend
+npm run start
 ```
 
-You can also use the backend convenience commands after creating the Python
-environment:
-
-```bash
-cd backend
-npm run ml:download:lung
-npm run ml:train:lung
-npm run ml:start
-```
-
-## Brain-stroke status
-
-The brain-stroke artifact and a reproducible training pipeline are not yet part
-of this repository. The current API reports that model as unavailable when
-`backend/ml_service/models/brain_stroke.keras` is absent. The lung work should
-serve as the engineering pattern, but a stroke dataset and label definition must
-be evaluated independently rather than copying lung assumptions.
+## 📝 Note on Diagnostics (Disclaimer)
+All machine learning features in this application (such as the Lung CT analysis) are strictly for **research and demonstration purposes**. The AI provides pattern-matching scores based on its training data and generates Grad-CAM overlays to visualize its attention. **It does not provide medical diagnoses.** Always consult a qualified healthcare professional.
