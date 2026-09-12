@@ -3,11 +3,14 @@
 __pycache__/
 .pytest_cache/
 *.py[cod]
-.venv/
+.venv*/
+ml_services/.venv/
+ml_services/.venv-tf220/
 
 # Trained artifacts and datasets are reproducible outputs, not source files.
 ml_services/models/brain_stroke.keras
 ml_services/models/brain_stroke_v2.keras
+ml_services/models/ct_anatomy_gate_v1.keras
 ml_services/models/lung_cancer_retrained.keras
 ml_services/data/
 ml_services/reports/**/*.keras

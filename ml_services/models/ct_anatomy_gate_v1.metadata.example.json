@@ -1,0 +1,18 @@
+{
+  "class_names": [
+    "head_ct",
+    "lung_ct",
+    "unsupported"
+  ],
+  "input_shape": [
+    224,
+    224,
+    3
+  ],
+  "model_version": "ct-anatomy-gate-v1",
+  "resize": "resize_with_pad",
+  "thresholds": {
+    "minimum_probability": 0.92,
+    "minimum_margin": 0.3
+  }
+}

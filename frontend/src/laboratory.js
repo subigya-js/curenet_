@@ -68,6 +68,9 @@ const Laboratory = () => {
         model_version: data.model_version || 'recovered-legacy',
         stroke_probability: data.stroke_probability,
         input_scope: data.input_scope || 'Input scope unavailable',
+        detected_anatomy: data.detected_anatomy,
+        anatomy_probability: data.anatomy_probability,
+        anatomy_gate_version: data.anatomy_gate_version,
       });
     } catch (err) {
       console.error('Error:', err);
@@ -241,6 +244,14 @@ const Laboratory = () => {
                           </p>
                         )}
                         <p className="clin-body">Supported input: {prediction.input_scope}</p>
+                        {prediction.detected_anatomy && (
+                          <p className="clin-body">
+                            Anatomy gate: <strong>{prediction.detected_anatomy.replace('_', ' ')}</strong>
+                            {prediction.anatomy_probability != null
+                              ? ` (${(prediction.anatomy_probability * 100).toFixed(1)}% model score)`
+                              : ''}
+                          </p>
+                        )}
                       </div>
                       {prediction.common_causes && prediction.common_causes.length > 0 && (
                         <div className="clin-card">

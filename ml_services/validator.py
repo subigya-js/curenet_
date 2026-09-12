@@ -2,6 +2,12 @@ import numpy as np
 from PIL import Image
 
 
+BLACK_BACKGROUND_MAX = 5
+MIN_FOREGROUND_RATIO = 0.08
+MIN_FOREGROUND_GRAY_LEVELS = 16
+MAX_FOREGROUND_FLAT_RATIO = 0.50
+
+
 def validate_radiological_scan(image: Image.Image) -> tuple[bool, str]:
     """
     Validates whether an input image meets the fundamental physical characteristics
@@ -48,20 +54,34 @@ def validate_radiological_scan(image: Image.Image) -> tuple[bool, str]:
         )
 
     # 2. Synthetic UI & Flat Graphic Check
-    # Screenshots and UI cards have massive concentrations of exact background hex values (e.g. flat #1e1e1e).
-    # Natural scans (and monitor photos) have continuous sensor noise and tissue gradations.
+    # Exported CT slices commonly have a large, exactly black exterior canvas, so
+    # black pixels must not count as evidence of a UI. Instead, require enough
+    # non-black foreground and evaluate flatness inside that foreground.
     gray = np.mean(arr, axis=2).astype(np.uint8)
-    _, counts = np.unique(gray, return_counts=True)
-    top_pixel_ratio = float(np.max(counts)) / float(gray.size)
-    if top_pixel_ratio > 0.50:
+    foreground = gray[gray > BLACK_BACKGROUND_MAX]
+    foreground_ratio = float(foreground.size) / float(gray.size)
+    if foreground_ratio < MIN_FOREGROUND_RATIO:
         return (
             False,
-            "Image contains unnatural flat color blocks characteristic of a software UI or screenshot.",
+            "Image contains too little visible scan content outside the black background.",
+        )
+
+    foreground_values, foreground_counts = np.unique(foreground, return_counts=True)
+    foreground_flat_ratio = float(np.max(foreground_counts)) / float(foreground.size)
+    if (
+        len(foreground_values) < MIN_FOREGROUND_GRAY_LEVELS
+        or foreground_flat_ratio > MAX_FOREGROUND_FLAT_RATIO
+    ):
+        return (
+            False,
+            "Visible image content contains unnatural flat grayscale regions characteristic of a graphic or screenshot.",
         )
 
     # 3. Dynamic Range & Soft-Tissue Contrast Check
     # Medical scans have continuous contrast across bone, air, and soft tissue.
-    std_contrast = float(np.std(gray))
+    # Measure only visible foreground so a black canvas cannot manufacture a
+    # high contrast score around an otherwise flat shape.
+    std_contrast = float(np.std(foreground))
     if std_contrast < 10.0:
         return (
             False,

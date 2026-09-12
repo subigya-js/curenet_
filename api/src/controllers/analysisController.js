@@ -70,7 +70,10 @@ exports.analyzeImage = async (req, res, next) => {
       warning: response.data.warning,
       model_version: response.data.model_version,
       stroke_probability: response.data.stroke_probability,
-      input_scope: response.data.input_scope
+      input_scope: response.data.input_scope,
+      detected_anatomy: response.data.detected_anatomy,
+      anatomy_probability: response.data.anatomy_probability,
+      anatomy_gate_version: response.data.anatomy_gate_version
     });
   } catch (error) {
     cleanup();

@@ -21,10 +21,21 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
+from anatomy_gate import (
+    ANATOMY_CLASS_NAMES,
+    ANATOMY_GATE_VERSION,
+    ANATOMY_INPUT_SHAPE,
+    EXPECTED_ANATOMY,
+    AnatomyGateResult,
+    interpret_anatomy_gate_output,
+    validate_anatomy_gate_metadata,
+)
 from validator import validate_radiological_scan
 
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "models"
+ANATOMY_GATE_MODEL_PATH = MODEL_DIR / "ct_anatomy_gate_v1.keras"
+ANATOMY_GATE_METADATA_PATH = MODEL_DIR / "ct_anatomy_gate_v1.metadata.json"
 STROKE_MODEL_PATH = MODEL_DIR / "brain_stroke.keras"
 STROKE_V2_MODEL_PATH = MODEL_DIR / "brain_stroke_v2.keras"
 STROKE_V2_METADATA_PATH = MODEL_DIR / "brain_stroke_v2.metadata.json"
@@ -45,6 +56,9 @@ else:
         else LEGACY_LUNG_MODEL_PATH
     ).resolve()
 MAX_UPLOAD_BYTES = int(os.getenv("CURENET_MAX_UPLOAD_BYTES", 10 * 1024 * 1024))
+REQUIRE_ANATOMY_GATE = os.getenv(
+    "CURENET_REQUIRE_ANATOMY_GATE", "true"
+).strip().lower() not in {"0", "false", "no"}
 Image.MAX_IMAGE_PIXELS = 25_000_000
 
 STROKE_INPUT_SHAPE = (224, 224, 3)
@@ -84,6 +98,7 @@ LUNG_CLASS_NAMES, LUNG_INPUT_SHAPE, LUNG_CONTRACT_SOURCE = _lung_contract()
 LUNG_SEMANTICS_VERIFIED = set(LUNG_CLASS_NAMES) == {"normal", "benign", "malignant"}
 models: dict[str, object] = {}
 model_versions: dict[str, str] = {}
+model_metadata: dict[str, dict[str, object]] = {}
 
 
 class AttentionAnalysis(BaseModel):
@@ -117,6 +132,9 @@ class PredictionResponse(BaseModel):
     model_version: str = "recovered-legacy"
     stroke_probability: float | None = None
     input_scope: str = "Original model input scope is unverified"
+    detected_anatomy: str | None = None
+    anatomy_probability: float | None = None
+    anatomy_gate_version: str | None = None
 
 
 def validate_model_contract(
@@ -167,6 +185,29 @@ def load_models() -> tuple[dict[str, object], dict[str, str]]:
     loaded: dict[str, object] = {}
     versions: dict[str, str] = {}
 
+    if ANATOMY_GATE_MODEL_PATH.exists():
+        try:
+            anatomy_metadata = validate_anatomy_gate_metadata(
+                ANATOMY_GATE_METADATA_PATH
+            )
+            anatomy_model = load_model(ANATOMY_GATE_MODEL_PATH, compile=False)
+            validate_model_contract(
+                anatomy_model, ANATOMY_INPUT_SHAPE, len(ANATOMY_CLASS_NAMES)
+            )
+            loaded["anatomy_gate"] = anatomy_model
+            versions["anatomy_gate"] = ANATOMY_GATE_VERSION
+            model_metadata["anatomy_gate"] = anatomy_metadata
+            print(
+                f"[ML Service] Loaded CT anatomy gate from {ANATOMY_GATE_MODEL_PATH}"
+            )
+        except Exception as exc:
+            print(f"[Warning] Failed loading CT anatomy gate: {exc}")
+    else:
+        print(
+            f"[Notice] CT anatomy gate not found at {ANATOMY_GATE_MODEL_PATH}. "
+            "Image predictions will fail closed until it is installed."
+        )
+
     stroke_path = STROKE_V2_MODEL_PATH if STROKE_V2_MODEL_PATH.exists() else STROKE_MODEL_PATH
     if stroke_path.exists():
         try:
@@ -209,6 +250,7 @@ async def lifespan(_: FastAPI):
     yield
     models.clear()
     model_versions.clear()
+    model_metadata.clear()
 
 
 app = FastAPI(
@@ -241,10 +283,17 @@ async def root() -> dict[str, str]:
 
 @app.get("/health")
 async def health() -> dict[str, object]:
+    inference_ready = (
+        "anatomy_gate" in models or not REQUIRE_ANATOMY_GATE
+    ) and any(
+        model_name in models for model_name in ("stroke", "lung")
+    )
     return {
-        "status": "ok",
+        "status": "ok" if inference_ready else "degraded",
+        "inference_ready": inference_ready,
         "models_loaded": sorted(models),
         "available_models": {
+            "anatomy_gate": "anatomy_gate" in models,
             "stroke": "stroke" in models,
             "lung": "lung" in models,
         },
@@ -252,6 +301,10 @@ async def health() -> dict[str, object]:
         "lung_class_names": list(LUNG_CLASS_NAMES),
         "lung_semantics_verified": LUNG_SEMANTICS_VERIFIED,
         "model_versions": model_versions,
+        "anatomy_gate_required": REQUIRE_ANATOMY_GATE,
+        "anatomy_gate_bypassed": (
+            not REQUIRE_ANATOMY_GATE and "anatomy_gate" not in models
+        ),
     }
 
 
@@ -298,6 +351,50 @@ def decode_and_preprocess(
 
     array = np.asarray(image, dtype=np.float32) / 255.0
     return np.expand_dims(array, axis=0)
+
+
+def enforce_anatomy_match(
+    gate_result: AnatomyGateResult, analysis_type: str
+) -> None:
+    expected = EXPECTED_ANATOMY[analysis_type]
+    if not gate_result.accepted:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "The scan anatomy is unsupported or could not be verified with "
+                "sufficient certainty. Upload a clean supported CT slice."
+            ),
+        )
+    if gate_result.prediction != expected:
+        readable_detected = gate_result.prediction.replace("_", " ")
+        readable_expected = expected.replace("_", " ")
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Anatomy mismatch: this appears to be {readable_detected}, but "
+                f"{analysis_type} analysis requires {readable_expected}."
+            ),
+        )
+
+
+def attach_anatomy_result(
+    response: PredictionResponse, gate_result: AnatomyGateResult
+) -> PredictionResponse:
+    response.detected_anatomy = gate_result.prediction
+    response.anatomy_probability = gate_result.probability
+    response.anatomy_gate_version = gate_result.model_version
+    return response
+
+
+def attach_anatomy_bypass_warning(
+    response: PredictionResponse,
+) -> PredictionResponse:
+    response.warning = (
+        "DEVELOPMENT MODE: CT anatomy was not verified because the anatomy gate "
+        "is bypassed. Do not use this result outside local interface testing. "
+        + response.warning
+    )
+    return response
 
 
 def _position_label(x_percent: float, y_percent: float) -> str:
@@ -801,12 +898,36 @@ async def predict(
     analysis_type: Annotated[Literal["stroke", "lung", "cancer"], Form()] = "stroke",
 ) -> PredictionResponse:
     normalized_type = "lung" if analysis_type == "cancer" else analysis_type
+    anatomy_model = models.get("anatomy_gate")
+    anatomy_metadata = model_metadata.get("anatomy_gate")
+    gate_result: AnatomyGateResult | None = None
+    if (
+        anatomy_model is None or anatomy_metadata is None
+    ) and REQUIRE_ANATOMY_GATE:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "The required CT anatomy gate is not loaded. Install "
+                "ct_anatomy_gate_v1.keras and its matching metadata before inference."
+            ),
+        )
+
+    contents = await file.read(MAX_UPLOAD_BYTES + 1)
+    if anatomy_model is not None and anatomy_metadata is not None:
+        anatomy_batch = decode_and_preprocess(
+            contents, ANATOMY_INPUT_SHAPE[:2], preserve_aspect_ratio=True
+        )
+        anatomy_output = await run_in_threadpool(
+            anatomy_model.predict, anatomy_batch, verbose=0  # type: ignore[attr-defined]
+        )
+        gate_result = interpret_anatomy_gate_output(anatomy_output, anatomy_metadata)
+        enforce_anatomy_match(gate_result, normalized_type)
+
     target_size = (
         STROKE_INPUT_SHAPE[:2]
         if normalized_type == "stroke"
         else LUNG_INPUT_SHAPE[:2]
     )
-    contents = await file.read(MAX_UPLOAD_BYTES + 1)
     image_batch = decode_and_preprocess(
         contents,
         target_size,
@@ -835,7 +956,12 @@ async def predict(
         model.predict, image_batch, verbose=0  # type: ignore[attr-defined]
     )
     if normalized_type == "stroke":
-        return stroke_response(raw_output, model_versions.get("stroke"))
+        response = stroke_response(raw_output, model_versions.get("stroke"))
+        return (
+            attach_anatomy_result(response, gate_result)
+            if gate_result is not None
+            else attach_anatomy_bypass_warning(response)
+        )
 
     attention = None
     try:
@@ -845,7 +971,12 @@ async def predict(
         )
     except Exception as exc:
         print(f"[Warning] Lung attention map unavailable: {exc}")
-    return lung_response(raw_output, attention, model_versions.get("lung"))
+    response = lung_response(raw_output, attention, model_versions.get("lung"))
+    return (
+        attach_anatomy_result(response, gate_result)
+        if gate_result is not None
+        else attach_anatomy_bypass_warning(response)
+    )
 
 
 if __name__ == "__main__":

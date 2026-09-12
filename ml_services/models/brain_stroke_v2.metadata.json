@@ -1,0 +1,30 @@
+{
+  "batch_size": 32,
+  "class_names": [
+    "no_stroke",
+    "ischemic_stroke",
+    "hemorrhagic_stroke"
+  ],
+  "dataset_source": "TEKNOFEST-2021 Stroke Dataset",
+  "dataset_url": "https://www.kaggle.com/datasets/ozguraslank/brain-stroke-ct-dataset",
+  "derived_stroke_probability": "1 - P(no_stroke)",
+  "dropout_rate": 0.35,
+  "fine_tune_epochs": 12,
+  "fine_tune_learning_rate": 1e-05,
+  "head_epochs": 8,
+  "head_learning_rate": 0.001,
+  "image_size": 224,
+  "input_range": [
+    0.0,
+    1.0
+  ],
+  "kaggle_dataset": "ozguraslank/brain-stroke-ct-dataset",
+  "modality": "non-contrast head CT rendered as PNG/JPEG",
+  "model_version": "stroke-ct-v2",
+  "resize": "resize_with_pad",
+  "scientific_scope": "research demonstration; slice-level output; not a diagnosis",
+  "seed": 2026,
+  "task": "three_class_stroke_pattern_classification_from_2d_head_ct",
+  "test_fraction": 0.15,
+  "validation_fraction": 0.15
+}
