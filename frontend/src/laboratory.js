@@ -65,6 +65,9 @@ const Laboratory = () => {
         patient_explanation: data.patient_explanation, common_causes: data.common_causes || [],
         attention: data.attention || null, plain_english: data.plain_english || '',
         next_steps: data.next_steps || [],
+        model_version: data.model_version || 'recovered-legacy',
+        stroke_probability: data.stroke_probability,
+        input_scope: data.input_scope || 'Input scope unavailable',
       });
     } catch (err) {
       console.error('Error:', err);
@@ -73,7 +76,7 @@ const Laboratory = () => {
   };
 
   const pct = prediction ? Math.round(prediction.probability * 100) : 0;
-  const levelLabel = { success: 'No Concern Detected', warning: 'Follow-Up Advised', danger: 'See a Doctor Soon', info: 'Unknown Output' };
+  const levelLabel = { success: 'No Pattern Flagged', warning: 'Follow-Up Advised', danger: 'Urgent Clinical Review', info: 'Unknown Output' };
   const levelIcon = { success: '✅', warning: '⚠️', danger: '🔴', info: 'ℹ️' };
 
   return (
@@ -130,8 +133,8 @@ const Laboratory = () => {
             <div className="lab-specs-card">
               <h5>📋 Scan Guidelines</h5>
               <ul>
-                <li>Axial CT or MRI slice (monochrome)</li>
-                <li>DICOM export or clean scan photo</li>
+                <li>One axial CT slice rendered as a monochrome image</li>
+                <li>Clean PNG or JPEG rendered from the original CT study</li>
                 <li>No charts, non-medical photos, or heavy text overlays</li>
               </ul>
             </div>
@@ -150,10 +153,10 @@ const Laboratory = () => {
                       <span className={`result-level-pill level-pill-${prediction.status_level}`}>
                         {levelIcon[prediction.status_level]} {levelLabel[prediction.status_level] || prediction.status_level}
                       </span>
-                      <span className="result-confidence-pill">{pct}% AI Confidence</span>
+                      <span className="result-confidence-pill">{pct}% Model Score</span>
                     </div>
                     <h2 className="report-main-title">{prediction.patient_headline}</h2>
-                    <p className="report-subtitle">AI-assisted {analysisType === 'lung' ? 'lung CT' : 'brain MRI'} pattern screening</p>
+                    <p className="report-subtitle">AI-assisted {analysisType === 'lung' ? 'lung CT' : 'head CT'} pattern screening · {prediction.model_version}</p>
                   </div>
                 </div>
 
@@ -182,7 +185,11 @@ const Laboratory = () => {
                         {Object.entries(prediction.probabilities).map(([cls, score]) => {
                           const pctVal = (score * 100).toFixed(1);
                           const isTop = cls === prediction.type;
-                          const barColor = cls === 'malignant' ? '#ef4444' : cls === 'benign' ? '#f59e0b' : '#10b981';
+                          const barColor = (cls === 'malignant' || cls === 'hemorrhagic_stroke')
+                            ? '#ef4444'
+                            : (cls === 'benign' || cls === 'ischemic_stroke')
+                              ? '#f59e0b'
+                              : '#10b981';
                           return (
                             <div key={cls} className={`prob-bar-row ${isTop ? 'prob-bar-top' : ''}`}>
                               <div className="prob-bar-meta">
@@ -228,6 +235,12 @@ const Laboratory = () => {
                       <div className="clin-card">
                         <p className="clin-eyebrow">📊 Model Analysis Summary</p>
                         <p className="clin-body">{prediction.clinical_summary}</p>
+                        {analysisType === 'stroke' && prediction.stroke_probability != null && (
+                          <p className="clin-body">
+                            Aggregate stroke-pattern score: <strong>{(prediction.stroke_probability * 100).toFixed(1)}%</strong>
+                          </p>
+                        )}
+                        <p className="clin-body">Supported input: {prediction.input_scope}</p>
                       </div>
                       {prediction.common_causes && prediction.common_causes.length > 0 && (
                         <div className="clin-card">
@@ -270,7 +283,7 @@ const Laboratory = () => {
                   </div>
                   <Link to="/schedule" className="appointment-cta-btn">📅 Schedule a Doctor's Consultation</Link>
                   <p className="report-legal-footnote">
-                    ⓘ This AI tool screens for visual patterns only and is not a clinical diagnosis. Results must be reviewed by a qualified healthcare professional before any medical decision is made.
+                    ⓘ {prediction.warning || 'This AI tool screens for visual patterns only and is not a clinical diagnosis. Results must be reviewed before any medical decision.'}
                   </p>
                 </div>
               </div>
@@ -278,7 +291,7 @@ const Laboratory = () => {
               <div className="lab-empty-state">
                 <div className="lab-empty-icon">🩻</div>
                 <div className="lab-empty-title">Awaiting Scan Upload</div>
-                <p className="lab-empty-desc">Select a scan type, upload your axial CT or MRI slice, and click <strong>"Analyze Scan"</strong> to get an AI-assisted result — explained in plain English and clinical detail.</p>
+                <p className="lab-empty-desc">Select a scan type, upload one rendered axial CT slice, and click <strong>"Analyze Scan"</strong> to get an AI-assisted research result.</p>
                 <div className="lab-empty-steps">
                   <div className="lab-empty-step-item"><span>STEP 1</span><p>Choose Lung or Brain mode</p></div>
                   <div className="lab-empty-step-item"><span>STEP 2</span><p>Upload your scan image</p></div>

@@ -26,6 +26,8 @@ from validator import validate_radiological_scan
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "models"
 STROKE_MODEL_PATH = MODEL_DIR / "brain_stroke.keras"
+STROKE_V2_MODEL_PATH = MODEL_DIR / "brain_stroke_v2.keras"
+STROKE_V2_METADATA_PATH = MODEL_DIR / "brain_stroke_v2.metadata.json"
 RETRAINED_LUNG_MODEL_PATH = MODEL_DIR / "lung_cancer_retrained.keras"
 LEGACY_LUNG_MODEL_PATH = MODEL_DIR / "lung_cancer.keras"
 configured_lung_model = os.getenv("CURENET_LUNG_MODEL_PATH")
@@ -46,6 +48,7 @@ MAX_UPLOAD_BYTES = int(os.getenv("CURENET_MAX_UPLOAD_BYTES", 10 * 1024 * 1024))
 Image.MAX_IMAGE_PIXELS = 25_000_000
 
 STROKE_INPUT_SHAPE = (224, 224, 3)
+STROKE_CLASS_NAMES = ("no_stroke", "ischemic_stroke", "hemorrhagic_stroke")
 DEFAULT_LUNG_INPUT_SHAPE = (128, 128, 3)
 RESEARCH_WARNING = (
     "Research demonstration only. This output is not a medical diagnosis and "
@@ -80,6 +83,7 @@ def _lung_contract() -> tuple[tuple[str, str, str], tuple[int, int, int], str]:
 LUNG_CLASS_NAMES, LUNG_INPUT_SHAPE, LUNG_CONTRACT_SOURCE = _lung_contract()
 LUNG_SEMANTICS_VERIFIED = set(LUNG_CLASS_NAMES) == {"normal", "benign", "malignant"}
 models: dict[str, object] = {}
+model_versions: dict[str, str] = {}
 
 
 class AttentionAnalysis(BaseModel):
@@ -110,6 +114,9 @@ class PredictionResponse(BaseModel):
     warning: str = RESEARCH_WARNING
     plain_english: str = ""
     next_steps: list[str] = Field(default_factory=list)
+    model_version: str = "recovered-legacy"
+    stroke_probability: float | None = None
+    input_scope: str = "Original model input scope is unverified"
 
 
 def validate_model_contract(
@@ -125,17 +132,52 @@ def validate_model_contract(
         )
 
 
-def load_models() -> dict[str, object]:
+def validate_stroke_v2_metadata(metadata_path: Path) -> dict[str, object]:
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        class_names = tuple(metadata["class_names"])
+        image_size = int(metadata["image_size"])
+        model_version = str(metadata["model_version"])
+        resize = str(metadata["resize"])
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            f"Stroke v2 metadata is required at {metadata_path}"
+        ) from exc
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Invalid stroke v2 metadata at {metadata_path}: {exc}") from exc
+
+    if class_names != STROKE_CLASS_NAMES:
+        raise RuntimeError(
+            f"Stroke v2 class order must be {STROKE_CLASS_NAMES}, got {class_names}"
+        )
+    if image_size != STROKE_INPUT_SHAPE[0]:
+        raise RuntimeError(
+            f"Stroke v2 image_size must be {STROKE_INPUT_SHAPE[0]}, got {image_size}"
+        )
+    if model_version != "stroke-ct-v2":
+        raise RuntimeError(f"Unsupported stroke model version: {model_version}")
+    if resize != "resize_with_pad":
+        raise RuntimeError(f"Unsupported stroke resize contract: {resize}")
+    return metadata
+
+
+def load_models() -> tuple[dict[str, object], dict[str, str]]:
     from tensorflow.keras.models import load_model
 
     loaded: dict[str, object] = {}
+    versions: dict[str, str] = {}
 
-    if STROKE_MODEL_PATH.exists():
+    stroke_path = STROKE_V2_MODEL_PATH if STROKE_V2_MODEL_PATH.exists() else STROKE_MODEL_PATH
+    if stroke_path.exists():
         try:
-            stroke_model = load_model(STROKE_MODEL_PATH, compile=False)
-            validate_model_contract(stroke_model, STROKE_INPUT_SHAPE, 1)
+            if stroke_path == STROKE_V2_MODEL_PATH:
+                validate_stroke_v2_metadata(STROKE_V2_METADATA_PATH)
+            stroke_model = load_model(stroke_path, compile=False)
+            stroke_output_units = 3 if stroke_path == STROKE_V2_MODEL_PATH else 1
+            validate_model_contract(stroke_model, STROKE_INPUT_SHAPE, stroke_output_units)
             loaded["stroke"] = stroke_model
-            print(f"[ML Service] Loaded brain stroke model from {STROKE_MODEL_PATH}")
+            versions["stroke"] = "stroke-ct-v2" if stroke_output_units == 3 else "recovered-legacy"
+            print(f"[ML Service] Loaded brain stroke model from {stroke_path}")
         except Exception as e:
             print(f"[Warning] Failed loading brain stroke model: {e}")
     else:
@@ -149,20 +191,24 @@ def load_models() -> dict[str, object]:
             lung_model = load_model(LUNG_MODEL_PATH, compile=False)
             validate_model_contract(lung_model, LUNG_INPUT_SHAPE, 3)
             loaded["lung"] = lung_model
+            versions["lung"] = "retrained" if LUNG_MODEL_PATH == RETRAINED_LUNG_MODEL_PATH.resolve() else "recovered-legacy"
             print(f"[ML Service] Loaded lung model from {LUNG_MODEL_PATH}")
         except Exception as e:
             print(f"[Warning] Failed loading lung model: {e}")
     else:
         print(f"[Notice] Lung cancer model artifact not found at {LUNG_MODEL_PATH}.")
 
-    return loaded
+    return loaded, versions
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    models.update(load_models())
+    loaded_models, loaded_versions = load_models()
+    models.update(loaded_models)
+    model_versions.update(loaded_versions)
     yield
     models.clear()
+    model_versions.clear()
 
 
 app = FastAPI(
@@ -205,10 +251,16 @@ async def health() -> dict[str, object]:
         "lung_contract_source": LUNG_CONTRACT_SOURCE,
         "lung_class_names": list(LUNG_CLASS_NAMES),
         "lung_semantics_verified": LUNG_SEMANTICS_VERIFIED,
+        "model_versions": model_versions,
     }
 
 
-def decode_and_preprocess(contents: bytes, target_size: tuple[int, int]) -> np.ndarray:
+def decode_and_preprocess(
+    contents: bytes,
+    target_size: tuple[int, int],
+    *,
+    preserve_aspect_ratio: bool = False,
+) -> np.ndarray:
     if not contents:
         raise HTTPException(status_code=400, detail="The uploaded file is empty")
     if len(contents) > MAX_UPLOAD_BYTES:
@@ -229,7 +281,16 @@ def decode_and_preprocess(contents: bytes, target_size: tuple[int, int]) -> np.n
                 )
 
             image = ImageOps.exif_transpose(opened).convert("RGB")
-            image = image.resize(target_size, Image.Resampling.BILINEAR)
+            if preserve_aspect_ratio:
+                image = ImageOps.pad(
+                    image,
+                    target_size,
+                    method=Image.Resampling.BILINEAR,
+                    color=(0, 0, 0),
+                    centering=(0.5, 0.5),
+                )
+            else:
+                image = image.resize(target_size, Image.Resampling.BILINEAR)
     except HTTPException:
         raise
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
@@ -362,9 +423,95 @@ def build_lung_attention(
     )
 
 
-def stroke_response(raw_output: np.ndarray) -> PredictionResponse:
-    stroke_score = float(np.asarray(raw_output).reshape(-1)[0])
-    stroke_score = float(np.clip(stroke_score, 0.0, 1.0))
+def _stroke_v2_response(scores: np.ndarray) -> PredictionResponse:
+    if scores.size != len(STROKE_CLASS_NAMES):
+        raise RuntimeError(f"Expected 3 stroke outputs, received {scores.size}")
+    if not np.all(np.isfinite(scores)):
+        raise RuntimeError("Stroke model returned a non-finite score")
+    if np.any(scores < -1e-6) or np.any(scores > 1.0 + 1e-6):
+        raise RuntimeError("Stroke model returned a score outside [0, 1]")
+    score_sum = float(scores.sum())
+    if score_sum <= 0:
+        raise RuntimeError("Stroke model returned an invalid probability distribution")
+
+    # Normalize tiny floating-point drift while rejecting outputs that are not softmax-like.
+    if not np.isclose(score_sum, 1.0, atol=1e-3):
+        raise RuntimeError("Stroke model outputs do not sum to 1")
+    scores = scores / score_sum
+    best_index = int(np.argmax(scores))
+    prediction = STROKE_CLASS_NAMES[best_index]
+    probability = float(scores[best_index])
+    stroke_probability = float(1.0 - scores[0])
+    probabilities = {
+        name: float(score) for name, score in zip(STROKE_CLASS_NAMES, scores)
+    }
+    subtype = prediction.replace("_", " ")
+    flagged = prediction != "no_stroke"
+
+    return PredictionResponse(
+        analysis_type="stroke",
+        prediction=prediction,
+        probability=probability,
+        probabilities=probabilities,
+        message=f"Model output: {subtype} ({probability:.1%} score)",
+        status_badge=(
+            f"Research Output: {subtype.title()} Pattern"
+            if flagged
+            else "Research Output: No Stroke Pattern"
+        ),
+        status_level="danger" if flagged else "success",
+        clinical_summary=(
+            f"Single-slice research classification: {subtype}. The aggregate "
+            f"stroke-pattern score is {stroke_probability:.1%}. This is not a diagnosis."
+        ),
+        confidence_label=f"Highest model score ({probability:.1%})",
+        recommended_action=(
+            "If stroke symptoms are present, call local emergency services immediately; "
+            "do not use this output to delay care. A clinician must review the complete study."
+        ),
+        patient_headline=(
+            "A stroke-associated image pattern was flagged."
+            if flagged
+            else "No stroke-associated pattern was the highest-scoring class."
+        ),
+        patient_explanation=(
+            "The model compares one rendered CT slice with patterns in its training data. "
+            "It cannot confirm or exclude a stroke, establish when a finding occurred, or "
+            "replace review of the full CT examination by a qualified clinician."
+        ),
+        common_causes=[
+            "Image appearance can vary with CT windowing, scanner settings, and artifacts",
+            "A single slice does not contain the context of the complete examination",
+            "Other conditions can resemble patterns learned by the classifier",
+        ],
+        plain_english=(
+            f"The highest model score was for {subtype}. The combined score for either "
+            f"stroke-associated class was {stroke_probability:.1%}. These are model scores, "
+            "not the chance that a person has a stroke."
+        ),
+        next_steps=[
+            "If there is face drooping, arm weakness, speech difficulty, or another sudden neurological symptom, call emergency services now",
+            "Have a qualified clinician review the complete CT study and clinical history",
+            "Do not start, stop, or change treatment based on this research output",
+        ],
+        model_version="stroke-ct-v2",
+        stroke_probability=stroke_probability,
+        input_scope="One rendered 2D non-contrast head CT slice (PNG or JPEG)",
+    )
+
+
+def stroke_response(
+    raw_output: np.ndarray, model_version: str | None = None
+) -> PredictionResponse:
+    scores = np.asarray(raw_output, dtype=np.float64).reshape(-1)
+    if scores.size == len(STROKE_CLASS_NAMES):
+        return _stroke_v2_response(scores)
+    if scores.size != 1:
+        raise RuntimeError(f"Expected 1 or 3 stroke outputs, received {scores.size}")
+    if not np.isfinite(scores[0]):
+        raise RuntimeError("Stroke model returned a non-finite score")
+
+    stroke_score = float(np.clip(scores[0], 0.0, 1.0))
     is_stroke = stroke_score >= 0.5
     prediction = "stroke" if is_stroke else "no_stroke"
     probability = stroke_score if is_stroke else 1.0 - stroke_score
@@ -457,12 +604,17 @@ def stroke_response(raw_output: np.ndarray) -> PredictionResponse:
         common_causes=common_causes,
         plain_english=plain_english,
         next_steps=next_steps,
+        model_version=model_version or "recovered-legacy",
+        stroke_probability=stroke_score,
+        input_scope="Original legacy model input scope is unverified",
     )
 
 
 
 def lung_response(
-    raw_output: np.ndarray, attention: AttentionAnalysis | None = None
+    raw_output: np.ndarray,
+    attention: AttentionAnalysis | None = None,
+    model_version: str | None = None,
 ) -> PredictionResponse:
     scores = np.asarray(raw_output, dtype=np.float64).reshape(-1)
     if scores.size != len(LUNG_CLASS_NAMES):
@@ -633,6 +785,12 @@ def lung_response(
             "does not replace a radiologist, and must not be used for clinical decisions."
         ),
         attention=attention,
+        model_version=model_version or "recovered-legacy",
+        input_scope=(
+            "One rendered 2D lung CT slice (PNG or JPEG)"
+            if model_version == "retrained"
+            else "Original legacy model input scope is unverified"
+        ),
     )
 
 
@@ -649,7 +807,14 @@ async def predict(
         else LUNG_INPUT_SHAPE[:2]
     )
     contents = await file.read(MAX_UPLOAD_BYTES + 1)
-    image_batch = decode_and_preprocess(contents, target_size)
+    image_batch = decode_and_preprocess(
+        contents,
+        target_size,
+        preserve_aspect_ratio=(
+            normalized_type == "stroke"
+            and model_versions.get("stroke") == "stroke-ct-v2"
+        ),
+    )
 
     model = models.get(normalized_type)
     if model is None:
@@ -662,7 +827,7 @@ async def predict(
             status_code=503,
             detail=(
                 f"Model for '{normalized_type}' is not loaded. "
-                f"Please ensure '{missing_filename}' is present in backend/ml_service/models/."
+                f"Please ensure '{missing_filename}' and its required metadata are present in ml_services/models/."
             ),
         )
 
@@ -670,7 +835,7 @@ async def predict(
         model.predict, image_batch, verbose=0  # type: ignore[attr-defined]
     )
     if normalized_type == "stroke":
-        return stroke_response(raw_output)
+        return stroke_response(raw_output, model_versions.get("stroke"))
 
     attention = None
     try:
@@ -680,7 +845,7 @@ async def predict(
         )
     except Exception as exc:
         print(f"[Warning] Lung attention map unavailable: {exc}")
-    return lung_response(raw_output, attention)
+    return lung_response(raw_output, attention, model_versions.get("lung"))
 
 
 if __name__ == "__main__":

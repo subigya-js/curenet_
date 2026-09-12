@@ -7,10 +7,12 @@ __pycache__/
 
 # Trained artifacts and datasets are reproducible outputs, not source files.
 ml_services/models/brain_stroke.keras
+ml_services/models/brain_stroke_v2.keras
 ml_services/models/lung_cancer_retrained.keras
 ml_services/data/
 ml_services/reports/**/*.keras
 ml_services/reports/**/*.training.csv
+ml_services/artifacts/
 
 # Runtime uploads may contain sensitive images.
 api/uploads/

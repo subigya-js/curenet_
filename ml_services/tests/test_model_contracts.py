@@ -15,6 +15,7 @@ from app import (
     lung_response,
     stroke_response,
     validate_model_contract,
+    validate_stroke_v2_metadata,
 )
 
 
@@ -61,19 +62,86 @@ def test_stroke_response_reports_both_scores() -> None:
     assert result.prediction == "stroke"
     assert result.probability == pytest.approx(0.8)
     assert result.probabilities["no_stroke"] == pytest.approx(0.2)
+    assert result.model_version == "recovered-legacy"
+    assert result.stroke_probability == pytest.approx(0.8)
+
+
+def test_stroke_v2_response_reports_subtype_and_aggregate_score() -> None:
+    result = stroke_response(np.array([[0.1, 0.7, 0.2]], dtype=np.float32))
+
+    assert result.prediction == "ischemic_stroke"
+    assert result.probability == pytest.approx(0.7)
+    assert result.probabilities == pytest.approx(
+        {
+            "no_stroke": 0.1,
+            "ischemic_stroke": 0.7,
+            "hemorrhagic_stroke": 0.2,
+        }
+    )
+    assert result.stroke_probability == pytest.approx(0.9)
+    assert result.model_version == "stroke-ct-v2"
+    assert "non-contrast head CT" in result.input_scope
+
+
+def test_stroke_response_rejects_malformed_multiclass_output() -> None:
+    with pytest.raises(RuntimeError, match="sum to 1"):
+        stroke_response(np.array([[0.4, 0.4, 0.4]], dtype=np.float32))
+
+
+def test_aspect_preserving_preprocessing_pads_instead_of_stretching() -> None:
+    gradient = np.tile(
+        np.linspace(10, 250, 20, dtype=np.uint8), (10, 1)
+    )
+    source = Image.fromarray(gradient, mode="L").convert("RGB")
+    encoded = BytesIO()
+    source.save(encoded, format="PNG")
+
+    batch = decode_and_preprocess(
+        encoded.getvalue(), (20, 20), preserve_aspect_ratio=True
+    )
+
+    assert np.all(batch[0, :5] == 0)
+    assert float(batch[0, 5:15].mean()) > 0
+    assert np.all(batch[0, 15:] == 0)
 
 
 def test_lung_response_is_multiclass() -> None:
-    result = lung_response(np.array([[0.1, 0.7, 0.2]], dtype=np.float32))
+    result = lung_response(
+        np.array([[0.1, 0.7, 0.2]], dtype=np.float32), model_version="retrained"
+    )
     assert result.prediction == LUNG_CLASS_NAMES[1]
     assert result.probability == pytest.approx(0.7)
     assert set(result.probabilities) == set(LUNG_CLASS_NAMES)
+    assert result.model_version == "retrained"
+    assert "lung CT" in result.input_scope
 
 
 def test_model_contract_rejects_wrong_input_shape() -> None:
     fake_model = SimpleNamespace(input_shape=(None, 224, 224, 3), output_shape=(None, 3))
     with pytest.raises(RuntimeError, match="contract mismatch"):
         validate_model_contract(fake_model, (128, 128, 3), 3)
+
+
+def test_stroke_v2_metadata_rejects_wrong_class_order(tmp_path: Path) -> None:
+    metadata_path = tmp_path / "brain_stroke_v2.metadata.json"
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "class_names": [
+                    "ischemic_stroke",
+                    "no_stroke",
+                    "hemorrhagic_stroke",
+                ],
+                "image_size": 224,
+                "model_version": "stroke-ct-v2",
+                "resize": "resize_with_pad",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="class order"):
+        validate_stroke_v2_metadata(metadata_path)
 
 
 def test_gradcam_attention_returns_png_overlay() -> None:

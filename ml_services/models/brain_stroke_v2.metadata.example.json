@@ -1,0 +1,18 @@
+{
+  "class_names": [
+    "no_stroke",
+    "ischemic_stroke",
+    "hemorrhagic_stroke"
+  ],
+  "derived_stroke_probability": "1 - P(no_stroke)",
+  "image_size": 224,
+  "input_range": [
+    0.0,
+    1.0
+  ],
+  "modality": "non-contrast head CT rendered as PNG/JPEG",
+  "model_version": "stroke-ct-v2",
+  "resize": "resize_with_pad",
+  "scientific_scope": "research demonstration; slice-level output; not a diagnosis",
+  "task": "three_class_stroke_pattern_classification_from_2d_head_ct"
+}

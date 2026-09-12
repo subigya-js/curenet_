@@ -67,7 +67,10 @@ exports.analyzeImage = async (req, res, next) => {
       probability: response.data.probability,
       prediction: response.data.prediction,
       probabilities: response.data.probabilities,
-      warning: response.data.warning
+      warning: response.data.warning,
+      model_version: response.data.model_version,
+      stroke_probability: response.data.stroke_probability,
+      input_scope: response.data.input_scope
     });
   } catch (error) {
     cleanup();
