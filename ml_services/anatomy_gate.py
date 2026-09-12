@@ -35,6 +35,7 @@ def validate_anatomy_gate_metadata(path: Path) -> dict[str, object]:
         thresholds = metadata["thresholds"]
         minimum_probability = float(thresholds["minimum_probability"])
         minimum_margin = float(thresholds["minimum_margin"])
+        deployment_ready = metadata["deployment_ready"]
     except FileNotFoundError as exc:
         raise RuntimeError(f"Anatomy-gate metadata is required at {path}") from exc
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
@@ -52,6 +53,8 @@ def validate_anatomy_gate_metadata(path: Path) -> dict[str, object]:
         raise RuntimeError(f"Unsupported anatomy-gate version: {model_version}")
     if resize != "resize_with_pad":
         raise RuntimeError(f"Unsupported anatomy-gate resize contract: {resize}")
+    if deployment_ready is not True:
+        raise RuntimeError("Anatomy-gate metadata is not approved for deployment")
     if not 0.0 < minimum_probability <= 1.0:
         raise RuntimeError("minimum_probability must be in (0, 1]")
     if not 0.0 <= minimum_margin <= 1.0:

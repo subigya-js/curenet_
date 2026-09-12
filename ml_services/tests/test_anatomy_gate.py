@@ -18,6 +18,7 @@ def valid_metadata() -> dict[str, object]:
         "class_names": ["head_ct", "lung_ct", "unsupported"],
         "input_shape": [224, 224, 3],
         "model_version": "ct-anatomy-gate-v1",
+        "deployment_ready": True,
         "resize": "resize_with_pad",
         "thresholds": {
             "minimum_probability": 0.90,
@@ -31,6 +32,16 @@ def test_metadata_contract_accepts_supported_schema(tmp_path: Path) -> None:
     path.write_text(json.dumps(valid_metadata()), encoding="utf-8")
 
     assert validate_anatomy_gate_metadata(path) == valid_metadata()
+
+
+def test_metadata_contract_rejects_smoke_artifact(tmp_path: Path) -> None:
+    metadata = valid_metadata()
+    metadata["deployment_ready"] = False
+    path = tmp_path / "ct_anatomy_gate_v1.metadata.json"
+    path.write_text(json.dumps(metadata), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="not approved for deployment"):
+        validate_anatomy_gate_metadata(path)
 
 
 def test_gate_accepts_confident_supported_anatomy() -> None:

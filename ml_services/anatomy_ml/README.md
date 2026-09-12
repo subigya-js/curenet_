@@ -55,6 +55,9 @@ python -m anatomy_ml.train \
   --output-dir artifacts/ct_anatomy_gate_smoke
 ```
 
+Smoke-test metadata is marked `deployment_ready: false`, and the inference API
+will reject it. Only a successful full run emits deployable metadata.
+
 The full run exports `ct_anatomy_gate_v1.keras`, matching metadata, test
 metrics, an audited manifest, and training history. Copy the model and metadata
 into `ml_services/models/`. Thresholds are selected on validation data subject

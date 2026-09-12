@@ -139,12 +139,21 @@ def main() -> None:
     validation_labels = manifest.loc[
         manifest["split"] == "validation", "label"
     ].map(label_lookup).to_numpy()
-    thresholds = select_thresholds(
-        validation_labels,
-        validation_probabilities,
-        unsupported_index=CLASS_NAMES.index("unsupported"),
-        maximum_unsafe_rate=config.maximum_unsafe_acceptance_rate,
-    )
+    if args.quick_check:
+        # A tiny, one-epoch smoke run is not statistically capable of satisfying
+        # the production unsafe-acceptance constraint. Use permissive thresholds
+        # only to exercise evaluation and export; metadata prevents deployment.
+        thresholds = {
+            "minimum_probability": 0.01,
+            "minimum_margin": 0.0,
+        }
+    else:
+        thresholds = select_thresholds(
+            validation_labels,
+            validation_probabilities,
+            unsupported_index=CLASS_NAMES.index("unsupported"),
+            maximum_unsafe_rate=config.maximum_unsafe_acceptance_rate,
+        )
 
     test_probabilities = best_model.predict(datasets["test"], verbose=1)
     test_rows = manifest.loc[manifest["split"] == "test"]
@@ -165,6 +174,8 @@ def main() -> None:
         "evaluation": test_metrics,
         "selected_training_stage": selected_candidate.stem,
         "selected_validation_loss": selected_validation_loss,
+        "deployment_ready": not args.quick_check,
+        "quick_check": args.quick_check,
         "scope": (
             "Routes rendered CT slices only; abstains on unsupported or uncertain input"
         ),

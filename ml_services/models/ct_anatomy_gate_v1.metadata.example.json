@@ -10,6 +10,7 @@
     3
   ],
   "model_version": "ct-anatomy-gate-v1",
+  "deployment_ready": true,
   "resize": "resize_with_pad",
   "thresholds": {
     "minimum_probability": 0.92,
