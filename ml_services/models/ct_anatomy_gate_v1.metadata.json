@@ -1,0 +1,271 @@
+{
+  "batch_size": 32,
+  "class_names": [
+    "head_ct",
+    "lung_ct",
+    "unsupported"
+  ],
+  "dataset_audit": {
+    "exact_duplicate_leakage": 0,
+    "exact_duplicates_removed": 45,
+    "group_count": 5955,
+    "group_leakage": 0,
+    "manifest_path": "/content/anatomy_manifest.csv",
+    "sample_count": 5955,
+    "single_source_labels": [],
+    "source_counts": [
+      {
+        "count": 138,
+        "label": "head_ct",
+        "source": "brain-stroke-ct",
+        "split": "test"
+      },
+      {
+        "count": 143,
+        "label": "head_ct",
+        "source": "medical-mnist-headct",
+        "split": "test"
+      },
+      {
+        "count": 146,
+        "label": "lung_ct",
+        "source": "iq-oth-nccd",
+        "split": "test"
+      },
+      {
+        "count": 173,
+        "label": "lung_ct",
+        "source": "medical-mnist-chestct",
+        "split": "test"
+      },
+      {
+        "count": 65,
+        "label": "unsupported",
+        "source": "medical-mnist-abdomenct",
+        "split": "test"
+      },
+      {
+        "count": 76,
+        "label": "unsupported",
+        "source": "medical-mnist-breastmri",
+        "split": "test"
+      },
+      {
+        "count": 69,
+        "label": "unsupported",
+        "source": "medical-mnist-cxr",
+        "split": "test"
+      },
+      {
+        "count": 71,
+        "label": "unsupported",
+        "source": "medical-mnist-hand",
+        "split": "test"
+      },
+      {
+        "count": 724,
+        "label": "head_ct",
+        "source": "brain-stroke-ct",
+        "split": "train"
+      },
+      {
+        "count": 687,
+        "label": "head_ct",
+        "source": "medical-mnist-headct",
+        "split": "train"
+      },
+      {
+        "count": 676,
+        "label": "lung_ct",
+        "source": "iq-oth-nccd",
+        "split": "train"
+      },
+      {
+        "count": 694,
+        "label": "lung_ct",
+        "source": "medical-mnist-chestct",
+        "split": "train"
+      },
+      {
+        "count": 359,
+        "label": "unsupported",
+        "source": "medical-mnist-abdomenct",
+        "split": "train"
+      },
+      {
+        "count": 358,
+        "label": "unsupported",
+        "source": "medical-mnist-breastmri",
+        "split": "train"
+      },
+      {
+        "count": 344,
+        "label": "unsupported",
+        "source": "medical-mnist-cxr",
+        "split": "train"
+      },
+      {
+        "count": 351,
+        "label": "unsupported",
+        "source": "medical-mnist-hand",
+        "split": "train"
+      },
+      {
+        "count": 138,
+        "label": "head_ct",
+        "source": "brain-stroke-ct",
+        "split": "validation"
+      },
+      {
+        "count": 164,
+        "label": "head_ct",
+        "source": "medical-mnist-headct",
+        "split": "validation"
+      },
+      {
+        "count": 141,
+        "label": "lung_ct",
+        "source": "iq-oth-nccd",
+        "split": "validation"
+      },
+      {
+        "count": 133,
+        "label": "lung_ct",
+        "source": "medical-mnist-chestct",
+        "split": "validation"
+      },
+      {
+        "count": 74,
+        "label": "unsupported",
+        "source": "medical-mnist-abdomenct",
+        "split": "validation"
+      },
+      {
+        "count": 66,
+        "label": "unsupported",
+        "source": "medical-mnist-breastmri",
+        "split": "validation"
+      },
+      {
+        "count": 87,
+        "label": "unsupported",
+        "source": "medical-mnist-cxr",
+        "split": "validation"
+      },
+      {
+        "count": 78,
+        "label": "unsupported",
+        "source": "medical-mnist-hand",
+        "split": "validation"
+      }
+    ],
+    "source_warning": "Every label should contain multiple independent sources so the gate cannot solve anatomy by recognizing a dataset.",
+    "split_counts": {
+      "test": {
+        "head_ct": 281,
+        "lung_ct": 319,
+        "unsupported": 281
+      },
+      "train": {
+        "head_ct": 1411,
+        "lung_ct": 1370,
+        "unsupported": 1412
+      },
+      "validation": {
+        "head_ct": 302,
+        "lung_ct": 274,
+        "unsupported": 305
+      }
+    }
+  },
+  "deployment_ready": true,
+  "dropout_rate": 0.3,
+  "evaluation": {
+    "accepted_accuracy": 1.0,
+    "accepted_fraction": 0.6799091940976163,
+    "classification_report": {
+      "accuracy": 0.9977298524404086,
+      "head_ct": {
+        "f1-score": 0.9982238010657194,
+        "precision": 0.9964539007092199,
+        "recall": 1.0,
+        "support": 281.0
+      },
+      "lung_ct": {
+        "f1-score": 0.9984301412872841,
+        "precision": 1.0,
+        "recall": 0.9968652037617555,
+        "support": 319.0
+      },
+      "macro avg": {
+        "f1-score": 0.9976984078305978,
+        "precision": 0.9976317272826699,
+        "recall": 0.9977688283001819,
+        "support": 881.0
+      },
+      "unsupported": {
+        "f1-score": 0.99644128113879,
+        "precision": 0.99644128113879,
+        "recall": 0.99644128113879,
+        "support": 281.0
+      },
+      "weighted avg": {
+        "f1-score": 0.9977299695460963,
+        "precision": 0.9977338775247342,
+        "recall": 0.9977298524404086,
+        "support": 881.0
+      }
+    },
+    "confusion_matrix": [
+      [
+        281,
+        0,
+        0
+      ],
+      [
+        0,
+        318,
+        1
+      ],
+      [
+        1,
+        0,
+        280
+      ]
+    ],
+    "sample_count": 881,
+    "supported_coverage": 0.9983333333333333,
+    "thresholds": {
+      "minimum_margin": 0.28,
+      "minimum_probability": 0.64
+    },
+    "unsafe_acceptance_rate": 0.0,
+    "unsupported_false_acceptance_rate": 0.0
+  },
+  "fine_tune_epochs": 8,
+  "fine_tune_learning_rate": 1e-05,
+  "head_epochs": 6,
+  "head_learning_rate": 0.001,
+  "image_size": 224,
+  "input_range": [
+    0.0,
+    1.0
+  ],
+  "input_shape": [
+    224,
+    224,
+    3
+  ],
+  "maximum_unsafe_acceptance_rate": 0.01,
+  "model_version": "ct-anatomy-gate-v1",
+  "quick_check": false,
+  "resize": "resize_with_pad",
+  "scope": "Routes rendered CT slices only; abstains on unsupported or uncertain input",
+  "seed": 2026,
+  "selected_training_stage": "fine_tuned_candidate",
+  "selected_validation_loss": 0.004062943626195192,
+  "thresholds": {
+    "minimum_margin": 0.28,
+    "minimum_probability": 0.64
+  }
+}
