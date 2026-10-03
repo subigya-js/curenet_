@@ -1,4 +1,4 @@
-"""Inference API for the recovered CureNet imaging models.
+"""Inference and symptom-retrieval API for the CureNet research application.
 
 The saved artifacts define preprocessing and output contracts. This service is
 a research demonstration and must not be used as a medical diagnostic system.
@@ -21,7 +21,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from anatomy_gate import (
+from imaging.anatomy_gate import (
     ANATOMY_CLASS_NAMES,
     ANATOMY_GATE_VERSION,
     ANATOMY_INPUT_SHAPE,
@@ -30,17 +30,17 @@ from anatomy_gate import (
     interpret_anatomy_gate_output,
     validate_anatomy_gate_metadata,
 )
-from validator import validate_radiological_scan
+from imaging.validator import validate_radiological_scan
+from symptom_ir.service import SymptomRetriever
 
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "models"
+SYMPTOM_DATASET_PATH = BASE_DIR / "symptom_ir" / "data" / "conditions.csv"
 ANATOMY_GATE_MODEL_PATH = MODEL_DIR / "ct_anatomy_gate_v1.keras"
 ANATOMY_GATE_METADATA_PATH = MODEL_DIR / "ct_anatomy_gate_v1.metadata.json"
-STROKE_MODEL_PATH = MODEL_DIR / "brain_stroke.keras"
 STROKE_V2_MODEL_PATH = MODEL_DIR / "brain_stroke_v2.keras"
 STROKE_V2_METADATA_PATH = MODEL_DIR / "brain_stroke_v2.metadata.json"
 RETRAINED_LUNG_MODEL_PATH = MODEL_DIR / "lung_cancer_retrained.keras"
-LEGACY_LUNG_MODEL_PATH = MODEL_DIR / "lung_cancer.keras"
 configured_lung_model = os.getenv("CURENET_LUNG_MODEL_PATH")
 if configured_lung_model:
     configured_path = Path(configured_lung_model)
@@ -50,11 +50,7 @@ if configured_lung_model:
         else BASE_DIR / configured_path
     ).resolve()
 else:
-    LUNG_MODEL_PATH = (
-        RETRAINED_LUNG_MODEL_PATH
-        if RETRAINED_LUNG_MODEL_PATH.exists()
-        else LEGACY_LUNG_MODEL_PATH
-    ).resolve()
+    LUNG_MODEL_PATH = RETRAINED_LUNG_MODEL_PATH.resolve()
 MAX_UPLOAD_BYTES = int(os.getenv("CURENET_MAX_UPLOAD_BYTES", 10 * 1024 * 1024))
 REQUIRE_ANATOMY_GATE = os.getenv(
     "CURENET_REQUIRE_ANATOMY_GATE", "true"
@@ -63,7 +59,6 @@ Image.MAX_IMAGE_PIXELS = 25_000_000
 
 STROKE_INPUT_SHAPE = (224, 224, 3)
 STROKE_CLASS_NAMES = ("no_stroke", "ischemic_stroke", "hemorrhagic_stroke")
-DEFAULT_LUNG_INPUT_SHAPE = (128, 128, 3)
 RESEARCH_WARNING = (
     "Research demonstration only. This output is not a medical diagnosis and "
     "must not replace evaluation by a qualified clinician."
@@ -81,17 +76,19 @@ def _lung_contract() -> tuple[tuple[str, str, str], tuple[int, int, int], str]:
             shape = tuple(int(value) for value in raw_shape)
             if len(names) != 3 or len(set(names)) != 3:
                 raise ValueError("class_names must contain three unique labels")
+            if names != ("normal", "benign", "malignant"):
+                raise ValueError(
+                    "class_names must be ordered as normal, benign, malignant"
+                )
             if len(shape) != 3 or shape[2] != 3 or min(shape) <= 0:
                 raise ValueError("input_shape must be [height, width, 3]")
             return names, shape, "model_metadata"  # type: ignore[return-value]
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             raise RuntimeError(f"Invalid lung model metadata at {metadata_path}: {exc}") from exc
 
-    raw = os.getenv("CURENET_LUNG_CLASS_NAMES", "class_0,class_1,class_2")
-    names = tuple(item.strip() for item in raw.split(",") if item.strip())
-    if len(names) != 3 or len(set(names)) != 3:
-        raise RuntimeError("CURENET_LUNG_CLASS_NAMES must contain exactly 3 unique labels")
-    return names, DEFAULT_LUNG_INPUT_SHAPE, "legacy_configuration"  # type: ignore[return-value]
+    raise RuntimeError(
+        f"Lung model metadata is required at {metadata_path}; class meanings must not be guessed"
+    )
 
 
 LUNG_CLASS_NAMES, LUNG_INPUT_SHAPE, LUNG_CONTRACT_SOURCE = _lung_contract()
@@ -99,6 +96,7 @@ LUNG_SEMANTICS_VERIFIED = set(LUNG_CLASS_NAMES) == {"normal", "benign", "maligna
 models: dict[str, object] = {}
 model_versions: dict[str, str] = {}
 model_metadata: dict[str, dict[str, object]] = {}
+symptom_retriever = SymptomRetriever(SYMPTOM_DATASET_PATH)
 
 
 class AttentionAnalysis(BaseModel):
@@ -129,12 +127,34 @@ class PredictionResponse(BaseModel):
     warning: str = RESEARCH_WARNING
     plain_english: str = ""
     next_steps: list[str] = Field(default_factory=list)
-    model_version: str = "recovered-legacy"
+    model_version: str = "unknown"
     stroke_probability: float | None = None
     input_scope: str = "Original model input scope is unverified"
     detected_anatomy: str | None = None
     anatomy_probability: float | None = None
     anatomy_gate_version: str | None = None
+
+
+class SymptomSearchRequest(BaseModel):
+    query: str = Field(min_length=2, max_length=2000)
+    top_k: int = Field(default=5, ge=1, le=10)
+
+
+class SymptomSearchResult(BaseModel):
+    condition: str
+    similarity_score: float
+    matched_terms: list[str] = Field(default_factory=list)
+
+
+class SymptomSearchResponse(BaseModel):
+    query: str
+    method: str = "tfidf_cosine_jaccard"
+    results: list[SymptomSearchResult] = Field(default_factory=list)
+    emergency_message: str | None = None
+    warning: str = (
+        "Informational retrieval only. These ranked conditions are not a "
+        "diagnosis or medical advice."
+    )
 
 
 def validate_model_contract(
@@ -208,23 +228,19 @@ def load_models() -> tuple[dict[str, object], dict[str, str]]:
             "Image predictions will fail closed until it is installed."
         )
 
-    stroke_path = STROKE_V2_MODEL_PATH if STROKE_V2_MODEL_PATH.exists() else STROKE_MODEL_PATH
-    if stroke_path.exists():
+    if STROKE_V2_MODEL_PATH.exists():
         try:
-            if stroke_path == STROKE_V2_MODEL_PATH:
-                validate_stroke_v2_metadata(STROKE_V2_METADATA_PATH)
-            stroke_model = load_model(stroke_path, compile=False)
-            stroke_output_units = 3 if stroke_path == STROKE_V2_MODEL_PATH else 1
-            validate_model_contract(stroke_model, STROKE_INPUT_SHAPE, stroke_output_units)
+            validate_stroke_v2_metadata(STROKE_V2_METADATA_PATH)
+            stroke_model = load_model(STROKE_V2_MODEL_PATH, compile=False)
+            validate_model_contract(stroke_model, STROKE_INPUT_SHAPE, 3)
             loaded["stroke"] = stroke_model
-            versions["stroke"] = "stroke-ct-v2" if stroke_output_units == 3 else "recovered-legacy"
-            print(f"[ML Service] Loaded brain stroke model from {stroke_path}")
+            versions["stroke"] = "stroke-ct-v2"
+            print(f"[ML Service] Loaded brain stroke model from {STROKE_V2_MODEL_PATH}")
         except Exception as e:
             print(f"[Warning] Failed loading brain stroke model: {e}")
     else:
         print(
-            f"[Notice] Brain stroke model artifact not found at {STROKE_MODEL_PATH}. "
-            "Download it from https://www.kaggle.com/models/divyanshusharma0802/brain-stroke-model"
+            f"[Notice] Brain stroke model artifact not found at {STROKE_V2_MODEL_PATH}."
         )
 
     if LUNG_MODEL_PATH.exists():
@@ -232,7 +248,7 @@ def load_models() -> tuple[dict[str, object], dict[str, str]]:
             lung_model = load_model(LUNG_MODEL_PATH, compile=False)
             validate_model_contract(lung_model, LUNG_INPUT_SHAPE, 3)
             loaded["lung"] = lung_model
-            versions["lung"] = "retrained" if LUNG_MODEL_PATH == RETRAINED_LUNG_MODEL_PATH.resolve() else "recovered-legacy"
+            versions["lung"] = "lung-ct-v1"
             print(f"[ML Service] Loaded lung model from {LUNG_MODEL_PATH}")
         except Exception as e:
             print(f"[Warning] Failed loading lung model: {e}")
@@ -282,6 +298,7 @@ async def root() -> dict[str, str]:
 
 
 @app.get("/health")
+@app.get("/api/v1/health")
 async def health() -> dict[str, object]:
     inference_ready = (
         "anatomy_gate" in models or not REQUIRE_ANATOMY_GATE
@@ -305,7 +322,41 @@ async def health() -> dict[str, object]:
         "anatomy_gate_bypassed": (
             not REQUIRE_ANATOMY_GATE and "anatomy_gate" not in models
         ),
+        "symptom_retrieval": {
+            "available": True,
+            "document_count": symptom_retriever.document_count,
+            "method": "tfidf_cosine_jaccard",
+        },
     }
+
+
+@app.post("/api/v1/symptoms/search", response_model=SymptomSearchResponse)
+async def search_symptoms(request: SymptomSearchRequest) -> SymptomSearchResponse:
+    query = request.query.strip()
+    if not query:
+        raise HTTPException(status_code=422, detail="Describe at least one symptom")
+
+    emergency_message = symptom_retriever.emergency_message(query)
+    if emergency_message:
+        return SymptomSearchResponse(
+            query=query,
+            results=[],
+            emergency_message=emergency_message,
+        )
+
+    results = await run_in_threadpool(symptom_retriever.search, query, request.top_k)
+    return SymptomSearchResponse(
+        query=query,
+        results=[
+            SymptomSearchResult(
+                condition=result.condition,
+                similarity_score=result.similarity_score,
+                matched_terms=list(result.matched_terms),
+            )
+            for result in results
+        ],
+        emergency_message=None,
+    )
 
 
 def decode_and_preprocess(
@@ -601,110 +652,13 @@ def stroke_response(
     raw_output: np.ndarray, model_version: str | None = None
 ) -> PredictionResponse:
     scores = np.asarray(raw_output, dtype=np.float64).reshape(-1)
-    if scores.size == len(STROKE_CLASS_NAMES):
-        return _stroke_v2_response(scores)
-    if scores.size != 1:
-        raise RuntimeError(f"Expected 1 or 3 stroke outputs, received {scores.size}")
-    if not np.isfinite(scores[0]):
-        raise RuntimeError("Stroke model returned a non-finite score")
-
-    stroke_score = float(np.clip(scores[0], 0.0, 1.0))
-    is_stroke = stroke_score >= 0.5
-    prediction = "stroke" if is_stroke else "no_stroke"
-    probability = stroke_score if is_stroke else 1.0 - stroke_score
-
-    confidence_label = f"Highest model score ({probability:.1%})"
-
-    if is_stroke:
-        status_badge = "Possible Stroke Pattern Flagged"
-        status_level = "danger"
-        patient_headline = "Unusual brain tissue changes detected — seek medical attention now."
-        patient_explanation = (
-            "The computer detected an area where brain tissue looks different than normal, which could indicate "
-            "restricted blood flow (an ischemic stroke) or bleeding. Because brain tissue requires fast medical attention, "
-            "this scan should be evaluated by an emergency doctor right away."
+    if scores.size != len(STROKE_CLASS_NAMES):
+        raise RuntimeError(
+            f"Expected {len(STROKE_CLASS_NAMES)} stroke outputs, received {scores.size}"
         )
-        plain_english = (
-            "A stroke happens when part of the brain doesn't get enough blood — either because a blood vessel is "
-            "blocked, or because it has burst. The AI found areas in this brain scan where the tissue looks "
-            "different from what it learned to recognise as normal. This could be a warning sign.\n\n"
-            "This is NOT a confirmed stroke diagnosis. The AI is looking at image patterns only — not running "
-            "blood tests, checking your blood pressure, or examining your symptoms. Only an emergency doctor "
-            "can confirm or rule out a stroke. If the person who had this scan is experiencing symptoms right now, "
-            "call emergency services immediately."
-        )
-        common_causes = [
-            "Acute blood clot or restricted blood flow (ischemic stroke)",
-            "Localized brain tissue inflammation or swelling",
-            "Bleeding (hemorrhagic episode) or transient ischemic event (TIA)",
-        ]
-        next_steps = [
-            "🚨 If symptoms are present NOW (drooping face, arm weakness, slurred speech, confusion) — call emergency services immediately",
-            "🏥 If no current symptoms: see a neurologist or emergency doctor today — do not wait",
-            "📁 Bring this scan and any previous brain scans to the appointment",
-            "🗣️ Tell the doctor exactly what symptoms were noticed and when they started",
-            "🚫 Do not drive yourself — have someone take you or call an ambulance",
-        ]
-        clinical_summary = (
-            "The neural network detected visual density variations in the brain scan consistent with "
-            "acute ischemic changes. This algorithmic finding requires urgent clinical evaluation."
-        )
-        recommended_action = (
-            "Consult an emergency neurologist or attending physician immediately. Correlate with physical symptoms."
-        )
-    else:
-        status_badge = "No Stroke Pattern Detected"
-        status_level = "success"
-        patient_headline = "Brain tissue looks balanced and normal in this slice."
-        patient_explanation = (
-            "The computer examined both sides of the brain and found normal tissue balance with no obvious bleeding "
-            "or blocked areas visible. Keep in mind that some minor or very early episodes might not show on a basic scan."
-        )
-        plain_english = (
-            "A healthy brain scan looks roughly symmetrical — both sides should appear similar. The AI compared "
-            "your brain scan to the patterns it learned from, and didn't find signs that it associates with a stroke, "
-            "like dark patches from blocked blood flow or bright spots from bleeding.\n\n"
-            "This is a reassuring result — but it does not guarantee your brain is completely healthy. Very early "
-            "or very small changes might not be visible on a single slice. If you or someone you know experienced "
-            "any stroke symptoms, see a doctor regardless of this result."
-        )
-        common_causes = [
-            "Normal, healthy symmetric brain tissue",
-            "No visible acute bleeding or ischemic damage in this slice",
-        ]
-        next_steps = [
-            "✅ No emergency signs detected — continue with your scheduled follow-up",
-            "📋 Know the FAST signs of a stroke: Face drooping, Arm weakness, Speech trouble, Time to call emergency services",
-            "🏥 If someone experienced symptoms earlier — still see a doctor, even if this scan looks normal",
-            "🧠 Regular check-ups with your doctor are the best way to monitor brain health",
-        ]
-        clinical_summary = (
-            "The imaging pipeline did not observe visual indicators of acute cerebral infarction or hemorrhage in this scan."
-        )
-        recommended_action = (
-            "No emergency scan findings. If you or a loved one experiences sudden face drooping, arm weakness, or speech trouble, seek emergency care immediately."
-        )
-
-    return PredictionResponse(
-        analysis_type="stroke",
-        prediction=prediction,
-        probability=probability,
-        probabilities={"no_stroke": 1.0 - stroke_score, "stroke": stroke_score},
-        message=f"Model output: {prediction} ({probability:.1%} score)",
-        status_badge=status_badge,
-        status_level=status_level,
-        clinical_summary=clinical_summary,
-        confidence_label=confidence_label,
-        recommended_action=recommended_action,
-        patient_headline=patient_headline,
-        patient_explanation=patient_explanation,
-        common_causes=common_causes,
-        plain_english=plain_english,
-        next_steps=next_steps,
-        model_version=model_version or "recovered-legacy",
-        stroke_probability=stroke_score,
-        input_scope="Original legacy model input scope is unverified",
-    )
+    if model_version not in {None, "stroke-ct-v2"}:
+        raise RuntimeError(f"Unsupported stroke model version: {model_version}")
+    return _stroke_v2_response(scores)
 
 
 
@@ -854,7 +808,7 @@ def lung_response(
         common_causes = []
         next_steps = []
         clinical_summary = (
-            "Neutral legacy-model output only. No clinical interpretation is available without verified class metadata."
+            "Unsupported model output. No interpretation is available for an unmapped class."
         )
         recommended_action = (
             "Do not use this output for a health decision. Use the reproducibly trained model with its metadata, "
@@ -882,17 +836,14 @@ def lung_response(
             "does not replace a radiologist, and must not be used for clinical decisions."
         ),
         attention=attention,
-        model_version=model_version or "recovered-legacy",
-        input_scope=(
-            "One rendered 2D lung CT slice (PNG or JPEG)"
-            if model_version == "retrained"
-            else "Original legacy model input scope is unverified"
-        ),
+        model_version=model_version or "lung-ct-v1",
+        input_scope="One rendered 2D lung CT slice (PNG or JPEG)",
     )
 
 
 
-@app.post("/predict", response_model=PredictionResponse)
+@app.post("/predict", response_model=PredictionResponse, include_in_schema=False)
+@app.post("/api/v1/imaging/predict", response_model=PredictionResponse)
 async def predict(
     file: Annotated[UploadFile, File(...)],
     analysis_type: Annotated[Literal["stroke", "lung", "cancer"], Form()] = "stroke",
@@ -940,7 +891,7 @@ async def predict(
     model = models.get(normalized_type)
     if model is None:
         missing_filename = (
-            "brain_stroke.keras"
+            STROKE_V2_MODEL_PATH.name
             if normalized_type == "stroke"
             else LUNG_MODEL_PATH.name
         )

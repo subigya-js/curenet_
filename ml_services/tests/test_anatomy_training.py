@@ -16,7 +16,7 @@ def write_manifest(tmp_path: Path, *, leak_group: bool = False) -> Path:
             pixels = np.arange(64, dtype=np.uint8).reshape(8, 8)
             pixels = np.roll(pixels, split_index * 7 + label_index * 3)
             image_path = tmp_path / f"{split}-{label}.png"
-            Image.fromarray(pixels, mode="L").save(image_path)
+            Image.fromarray(pixels).save(image_path)
             group_id = "leaking-group" if leak_group and label == "head_ct" else f"{split}-{label}"
             rows.append(
                 {

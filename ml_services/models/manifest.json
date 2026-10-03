@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "artifacts": {
+    "anatomy_gate_v1": {
+      "filename": "ct_anatomy_gate_v1.keras",
+      "sha256": "040bce12ed66e38b9fbe8da9d72cfa19de30b555aa2427346449388ac553aede",
+      "size_bytes": 4354559,
+      "metadata": "ct_anatomy_gate_v1.metadata.json",
+      "distribution": "local_generated_artifact"
+    },
+    "brain_stroke_v2": {
+      "filename": "brain_stroke_v2.keras",
+      "sha256": "4300c95523b36c5b0dd1a9d81a785a3d26aa9e7e1eab3d280097acf271e1a8ee",
+      "size_bytes": 24671922,
+      "metadata": "brain_stroke_v2.metadata.json",
+      "distribution": "local_generated_artifact"
+    },
+    "lung_retrained_v1": {
+      "filename": "lung_cancer_retrained.keras",
+      "sha256": "c892fa12baac86edca0b7b4ba2c0603195ac2bc2a1f387f0c7617c5641d36730",
+      "size_bytes": 9648159,
+      "metadata": "lung_cancer_retrained.metadata.json",
+      "distribution": "local_generated_artifact"
+    }
+  }
+}

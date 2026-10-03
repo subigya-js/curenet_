@@ -1,113 +1,238 @@
-# CureNet 🏥
+# CureNet
 
-CureNet is a comprehensive, AI-powered medical platform designed to bridge the gap between advanced medical research tools and accessible patient care. It provides an intuitive interface for both clinicians and patients, offering features ranging from AI-assisted diagnostic imaging (like Lung CT scans) to virtual appointments, chatbots, and electronic health records.
+**Anatomy-aware medical image classification and symptom information retrieval**
 
-## 🏗️ Architecture & Structure
+CureNet is a collaborative final-year computer engineering research project.
+The focused application combines two CT image-pattern classifiers, an anatomy
+and unsupported-input gate, Grad-CAM attention visualization, and a lexical
+symptom-retrieval baseline.
 
-The repository is organized into three completely independent services, allowing for clean separation of concerns and scalable development:
+> CureNet is an educational research prototype. It is not a medical device and
+> must not be used for diagnosis, triage, treatment, or any clinical decision.
 
+## Research modules
+
+| Module | Method | Supported output |
+|---|---|---|
+| Lung CT | MobileNetV2 transfer learning | `normal`, `benign`, `malignant` |
+| Brain stroke | EfficientNetV2B0 transfer learning | `no_stroke`, `ischemic_stroke`, `hemorrhagic_stroke` |
+| Anatomy gate | Three-class classifier with abstention thresholds | `head_ct`, `lung_ct`, `unsupported` |
+| Symptom retrieval | TF-IDF cosine + Jaccard similarity | Ranked related conditions |
+
+The imaging modules accept one rendered axial CT slice in JPEG or PNG format.
+They do not process a complete DICOM study. Grad-CAM shows regions that
+influenced a model output; it is not lesion localization or segmentation.
+
+## Focused architecture
+
+```text
+React research interface
+        |
+        v
+FastAPI research service
+        +-- image validation
+        +-- anatomy/OOD gate
+        +-- lung CT classifier
+        +-- stroke CT classifier
+        +-- symptom information retrieval
 ```
-curenet_/
-├── frontend/     # React.js application (User Interface)
-├── api/          # Node.js / Express backend (Database & Business Logic)
-└── ml_services/  # Python / FastAPI backend (AI & Machine Learning Inference)
+
+The Node/Express, MySQL, appointment, and administration implementation from
+the original hospital-management prototype remains recoverable from Git commit
+`435a150`. It is intentionally excluded from the focused medical-AI tree.
+
+## Repository structure
+
+```text
+frontend/
+  src/pages/              Route-level React pages
+  src/styles/             Page and shared styles
+  src/config/             Frontend runtime configuration
+ml_services/
+  app.py                  Versioned FastAPI entry point
+  imaging/                Shared image validation and anatomy contracts
+  anatomy_ml/             Anatomy-gate training pipeline
+  lung_ml/                Lung model, data, metrics, training, and documentation
+  stroke_ml/              Stroke model, data, metrics, training, and documentation
+  symptom_ir/             Retrieval service and reviewed corpus
+  models/                 Runtime artifacts, metadata, and checksum manifest
+  reports/                Reproducible evaluation evidence
+  tests/                  Model, data, validation, and retrieval tests
+docs/model_cards/         Model-specific intended use and limitations
+notebooks/                Optional hosted-training notebooks
+scripts/                  Repository maintenance utilities
 ```
 
----
+Detailed documentation:
 
-## 1️⃣ Frontend (React App)
-The frontend is a robust Single Page Application built with **React.js**. It features a modern, dark-themed, glassmorphic UI designed to look highly professional for clinicians while remaining accessible to regular users.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): runtime and training data flows
+- [`docs/RUNBOOK.md`](docs/RUNBOOK.md): installation, startup, API calls, training, and troubleshooting
+- [`docs/FILE_MAP.md`](docs/FILE_MAP.md): purpose and interconnections of every non-frontend file
+- [`docs/RESEARCH_SCOPE.md`](docs/RESEARCH_SCOPE.md): supported claims and evaluation boundaries
 
-- **Port**: `http://localhost:3000`
-- **Key Tech**: React Router, Axios, Bootstrap, Custom Vanilla CSS
-- **Features**:
-  - **Dual Dashboards**: Separate views for Patients and Doctors/Admins.
-  - **Laboratory / Diagnostics**: Upload medical scans (like Lung CTs) for instant AI screening. Results are displayed with plain English explanations, numbered next steps, Grad-CAM metrics, and clinical summaries.
-  - **Appointments**: Schedule and view text or virtual appointments.
-  - **AI Chatbot**: Built-in chatbot for answering quick medical queries.
+## Run the focused application
 
-### Setup & Run (Frontend)
+There are two running processes: FastAPI and React. FastAPI is both the HTTP
+API and the ML inference service. Model training is offline and does not require
+a separate server.
+
+### 1. Install dependencies
+
+Use Python 3.11. TensorFlow compatibility is not guaranteed with Python 3.13.
+
 ```bash
-cd frontend
-npm install
-npm run start
+make api-install
+make frontend-install
+make verify-models
 ```
 
----
+### 2. Start FastAPI and ML inference
 
-## 2️⃣ API (Node.js/Express)
-The core backend handles all the standard application logic, database operations, user authentication, and serves as a bridge for the chatbot.
-
-- **Port**: `http://localhost:8801`
-- **Key Tech**: Node.js, Express, MySQL (mysql2), Express-Session, Multer (for file uploads)
-- **Database**: Connects to a MySQL database named `curenet` on port `3306`.
-- **Features**:
-  - Secure authentication and session management for Patients, Doctors, and Admins.
-  - CRUD operations for medical history, appointments, and hospital tables.
-  - Intermediary routing (routes queries to the Python ML services when AI is needed).
-
-### Setup & Run (API)
-Ensure you have a local MySQL instance running with a database named `curenet`. Configure your `.env` file based on `.env.example`.
 ```bash
-cd api
-npm install
-npm run start    # Starts with nodemon for hot-reloading
+make api-start
 ```
 
----
+Health, model status, and interactive API documentation:
 
-## 3️⃣ ML Services (Python/FastAPI)
-The machine learning microservice is dedicated entirely to heavy computational tasks, deep learning inference, and NLP processing. 
+```bash
+curl http://127.0.0.1:8000/api/v1/health
+```
 
-- **Port**: `http://127.0.0.1:8000`
-- **Key Tech**: Python 3.11+, FastAPI, Uvicorn, TensorFlow/Keras, OpenCV, Numpy
-- **Features**:
-  - **Lung Cancer CT Screening**: Uses a retrained deep learning model to classify CT slices into Normal, Benign, or Malignant.
-  - **Grad-CAM Attention Maps**: Generates visual heatmaps (attention overlays) explaining exactly which parts of a scan influenced the AI's decision.
-  - **Medical Chatbot Backend**: Processes NLP queries (e.g., via `recommend.py`).
-  - **Training Pipelines**: Includes scripts like `train_lung.py` and `download_lung_dataset.py` to fetch data from Kaggle and train/retrain the models locally.
+Open `http://127.0.0.1:8000/docs` to inspect and call the API interactively.
 
-### Setup & Run (ML Services)
-It is highly recommended to use a virtual environment to avoid dependency conflicts.
+### 3. Start the frontend in a second terminal
+
+```bash
+make frontend-start
+```
+
+Open `http://localhost:3000`.
+
+See the [runbook](docs/RUNBOOK.md) for first-clone model setup, direct commands,
+environment variables, cURL examples, and troubleshooting.
+
+## API
+
+### Image classification
+
+```http
+POST /api/v1/imaging/predict
+Content-Type: multipart/form-data
+
+file=<jpeg-or-png>
+analysis_type=lung|stroke
+```
+
+The historical `/predict` path remains as a hidden compatibility alias.
+
+### Symptom retrieval
+
+```http
+POST /api/v1/symptoms/search
+Content-Type: application/json
+
+{
+  "query": "persistent cough chest pain and difficulty breathing",
+  "top_k": 5
+}
+```
+
+Retrieval scores represent lexical similarity to corpus descriptions. They are
+not diagnostic confidence or disease probabilities.
+
+## Model selection at runtime
+
+Stroke loading order:
+
+1. `models/brain_stroke_v2.keras`
+
+Lung loading order:
+
+1. `CURENET_LUNG_MODEL_PATH`, when configured
+2. `models/lung_cancer_retrained.keras`
+
+The anatomy gate is required by default. Set
+`CURENET_REQUIRE_ANATOMY_GATE=false` only for local interface development; the
+API marks every resulting prediction as anatomy-unverified.
+
+Large retrained model artifacts are intentionally excluded from Git. A model is
+valid only together with its matching metadata and evaluation outputs. A model
+download/checksum workflow is planned before public release.
+
+Verify locally available artifacts against the tracked manifest:
+
+```bash
+make verify-models
+```
+
+## Training
+
+The detailed lung protocol, outputs, and acceptance boundary are documented in
+[`ml_services/lung_ml/README.md`](ml_services/lung_ml/README.md). Stroke and anatomy-gate
+requirements are documented in their respective package READMEs.
+
+### Lung CT
+
 ```bash
 cd ml_services
-python3.11 -m venv .venv
-source .venv/bin/activate       # On Mac/Linux
-# .venv\Scripts\activate        # On Windows
-
-# Install dependencies
-pip install -r requirements.txt
-# (Optional) Install training dependencies if you want to train models
 pip install -r requirements-train.txt
-
-# Start the inference server
-uvicorn app:app --host 127.0.0.1 --port 8000 --reload
+python -m lung_ml.download
+python -m lung_ml.train
 ```
 
----
+### Brain stroke
 
-## 🚀 Quick Start (Running Everything Locally)
-
-To get the entire stack running at once, you will need **three separate terminal windows**.
-
-**Terminal 1 (Database & API)**
-```bash
-cd api
-npm run start
-```
-
-**Terminal 2 (AI/ML Backend)**
 ```bash
 cd ml_services
-source .venv/bin/activate
-uvicorn app:app --host 127.0.0.1 --port 8000
+pip install -r requirements-train.txt
+python -m stroke_ml.train --output-dir artifacts/stroke_ct_v2
 ```
 
-**Terminal 3 (User Interface)**
+### Anatomy gate
+
 ```bash
-cd frontend
-npm run start
+cd ml_services
+python -m anatomy_ml.train \
+  --manifest /path/to/reviewed-anatomy-manifest.csv \
+  --output-dir artifacts/ct_anatomy_gate_v1
 ```
 
-## 📝 Note on Diagnostics (Disclaimer)
-All machine learning features in this application (such as the Lung CT analysis) are strictly for **research and demonstration purposes**. The AI provides pattern-matching scores based on its training data and generates Grad-CAM overlays to visualize its attention. **It does not provide medical diagnoses.** Always consult a qualified healthcare professional.
+Do not report a final metric until the corresponding split manifest, config,
+predictions, and model metadata come from the same training run.
+
+## Tests
+
+Install the training dependency set before running the complete ML suite:
+
+```bash
+make training-install
+make frontend-build
+make frontend-test
+make ml-test
+```
+
+The full ML suite requires dependencies from `requirements-train.txt` because
+some tests audit training data and model contracts.
+
+## Evaluation limitations
+
+- Current imaging evaluation is slice-level.
+- Reliable patient identifiers are not consistently available in the public
+  dataset packaging.
+- Correlated slices may cross partitions and inflate measured performance.
+- No external-site, prospective, subgroup, or clinical validation exists.
+- JPEG/PNG input loses DICOM series context and Hounsfield-unit calibration.
+- Early ischemic findings may be subtle or absent on one non-contrast CT slice.
+- The symptom corpus and relevance judgments have not been clinically validated.
+
+## Contributions
+
+Module ownership and collaborative work are documented in
+[`CONTRIBUTIONS.md`](CONTRIBUTIONS.md). The focused portfolio highlights the
+lung CT module, Grad-CAM integration, frontend development, and shared symptom
+retrieval work while crediting the team-led stroke and original API modules.
+
+## License
+
+Source code is provided under the repository license. Dataset and model-artifact
+reuse remains subject to the original dataset licenses and terms.

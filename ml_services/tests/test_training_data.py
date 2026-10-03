@@ -3,8 +3,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from training.data import CLASS_NAMES, discover_samples, stratified_slice_split
-from training.metrics import classification_metrics
+from lung_ml.data import CLASS_NAMES, discover_samples, stratified_slice_split
+from lung_ml.metrics import classification_metrics
 
 
 def test_dataset_discovery_supports_public_bengin_typo(tmp_path: Path) -> None:

@@ -27,19 +27,11 @@ def _keras_config(filename: str) -> dict:
         return json.loads(archive.read("config.json"))
 
 
-def test_recovered_artifacts_encode_expected_contracts() -> None:
-    stroke_path = MODEL_DIR / "brain_stroke.keras"
-    if stroke_path.exists():
-        stroke = _keras_config("brain_stroke.keras")
-        stroke_layers = stroke["config"]["layers"]
-        assert stroke["config"]["build_input_shape"] == [None, 224, 224, 3]
-        assert stroke_layers[-1]["config"]["units"] == 1
-        assert stroke_layers[-1]["config"]["activation"] == "sigmoid"
-
-    lung = _keras_config("lung_cancer.keras")
+def test_current_lung_artifact_encodes_expected_contract() -> None:
+    lung = _keras_config("lung_cancer_retrained.keras")
     lung_layers = lung["config"]["layers"]
     input_layer = next(layer for layer in lung_layers if layer["class_name"] == "InputLayer")
-    assert input_layer["config"]["batch_shape"] == [None, 128, 128, 3]
+    assert input_layer["config"]["batch_shape"] == [None, 224, 224, 3]
     assert lung_layers[-1]["config"]["units"] == 3
     assert lung_layers[-1]["config"]["activation"] == "softmax"
 
@@ -55,15 +47,6 @@ def test_preprocessing_produces_normalized_rgb_batch(target_size: tuple[int, int
     assert batch.shape == (1, target_size[1], target_size[0], 3)
     assert batch.dtype == np.float32
     assert 0.0 <= float(batch.min()) <= float(batch.max()) <= 1.0
-
-
-def test_stroke_response_reports_both_scores() -> None:
-    result = stroke_response(np.array([[0.8]], dtype=np.float32))
-    assert result.prediction == "stroke"
-    assert result.probability == pytest.approx(0.8)
-    assert result.probabilities["no_stroke"] == pytest.approx(0.2)
-    assert result.model_version == "recovered-legacy"
-    assert result.stroke_probability == pytest.approx(0.8)
 
 
 def test_stroke_v2_response_reports_subtype_and_aggregate_score() -> None:
@@ -92,7 +75,7 @@ def test_aspect_preserving_preprocessing_pads_instead_of_stretching() -> None:
     gradient = np.tile(
         np.linspace(10, 250, 20, dtype=np.uint8), (10, 1)
     )
-    source = Image.fromarray(gradient, mode="L").convert("RGB")
+    source = Image.fromarray(gradient).convert("RGB")
     encoded = BytesIO()
     source.save(encoded, format="PNG")
 

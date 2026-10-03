@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from fastapi import HTTPException
 
-from anatomy_gate import (
+from imaging.anatomy_gate import (
     AnatomyGateResult,
     interpret_anatomy_gate_output,
     validate_anatomy_gate_metadata,
