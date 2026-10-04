@@ -4,7 +4,6 @@ The React application exposes the focused CureNet research modules:
 
 - Lung CT slice classification
 - Brain-stroke CT slice classification
-- Symptom-based condition retrieval
 - Model methodology and contribution scope
 
 Copy `.env.example` to `.env` and configure the FastAPI base URL when it is

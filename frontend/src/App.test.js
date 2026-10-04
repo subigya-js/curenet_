@@ -7,5 +7,5 @@ test('renders the focused medical AI research home', () => {
   expect(screen.getByText('CureNet')).toBeInTheDocument();
   expect(screen.getByText('Lung CT Classification')).toBeInTheDocument();
   expect(screen.getByText('Stroke-Pattern Classification')).toBeInTheDocument();
-  expect(screen.getByText('Symptom Information Retrieval')).toBeInTheDocument();
+  expect(screen.getByText('Computer vision for lung CT and brain-stroke image analysis.')).toBeInTheDocument();
 });

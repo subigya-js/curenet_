@@ -17,13 +17,6 @@ const modules = [
     link: '/imaging?mode=stroke',
     action: 'Analyze a scan',
   },
-  {
-    icon: '⌕',
-    title: 'Symptom Information Retrieval',
-    description: 'A lexical retrieval pipeline ranks conditions whose symptom descriptions resemble a user query.',
-    link: '/symptoms',
-    action: 'Search symptoms',
-  },
 ];
 
 function HomePage() {
@@ -33,7 +26,6 @@ function HomePage() {
         <Link className="research-brand" to="/">CureNet</Link>
         <nav>
           <Link to="/imaging">Medical imaging</Link>
-          <Link to="/symptoms">Symptom retrieval</Link>
           <Link to="/methodology">Methodology</Link>
           <Link to="/about">About</Link>
         </nav>
@@ -42,11 +34,11 @@ function HomePage() {
       <main>
         <section className="research-hero">
           <p className="research-eyebrow">Final-year computer engineering research project</p>
-          <h1>Medical image classification and symptom retrieval, with explicit safety boundaries.</h1>
+          <h1>Computer vision for lung CT and brain-stroke image analysis.</h1>
           <p className="research-lead">
-            CureNet combines anatomy-aware CT routing, disease-pattern classifiers,
-            Grad-CAM attention visualization, and symptom-based information retrieval
-            in one reproducible research prototype.
+            CureNet combines anatomy-aware CT routing, lung and brain-stroke
+            classifiers, and Grad-CAM attention visualization in one reproducible
+            medical-image research prototype.
           </p>
           <div className="research-warning">
             Research and education only. CureNet is not a medical device and does not provide diagnoses or treatment advice.

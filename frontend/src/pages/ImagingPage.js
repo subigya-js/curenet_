@@ -83,7 +83,7 @@ const ImagingPage = () => {
   };
 
   const pct = prediction ? Math.round(prediction.probability * 100) : 0;
-  const levelLabel = { success: 'No Pattern Flagged', warning: 'Follow-Up Advised', danger: 'Urgent Clinical Review', info: 'Unknown Output' };
+  const levelLabel = { success: 'Normal-class Pattern', warning: 'Benign-class Pattern', danger: 'Malignant-class Pattern', info: 'Unknown Output' };
   const levelIcon = { success: '✅', warning: '⚠️', danger: '🔴', info: 'ℹ️' };
 
   return (
@@ -163,7 +163,7 @@ const ImagingPage = () => {
                       <span className="result-confidence-pill">{pct}% Model Score</span>
                     </div>
                     <h2 className="report-main-title">{prediction.patient_headline}</h2>
-                    <p className="report-subtitle">AI-assisted {analysisType === 'lung' ? 'lung CT' : 'head CT'} pattern screening · {prediction.model_version}</p>
+                    <p className="report-subtitle">AI-assisted {analysisType === 'lung' ? 'lung CT' : 'head CT'} pattern classification · {prediction.model_version}</p>
                   </div>
                 </div>
 
@@ -222,7 +222,7 @@ const ImagingPage = () => {
                       </div>
                       {prediction.next_steps && prediction.next_steps.length > 0 && (
                         <div className="nextsteps-card">
-                          <p className="nextsteps-eyebrow">📋 What should I do now?</p>
+                          <p className="nextsteps-eyebrow">📋 How to interpret this output</p>
                           <ol className="nextsteps-list">
                             {prediction.next_steps.map((step, i) => (
                               <li key={i} className="nextstep-item">
@@ -293,7 +293,7 @@ const ImagingPage = () => {
                 {/* Footer */}
                 <div className="report-footer">
                   <div className="report-recommended">
-                    <span className="report-recommended-label">Recommended next step:</span>
+                    <span className="report-recommended-label">Interpretation guidance:</span>
                     <span className="report-recommended-text">{prediction.recommended_action}</span>
                   </div>
                   <Link to="/methodology" className="methodology-cta-btn">Read the model methodology</Link>
@@ -310,7 +310,7 @@ const ImagingPage = () => {
                 <div className="lab-empty-steps">
                   <div className="lab-empty-step-item"><span>STEP 1</span><p>Choose Lung or Brain mode</p></div>
                   <div className="lab-empty-step-item"><span>STEP 2</span><p>Upload your scan image</p></div>
-                  <div className="lab-empty-step-item"><span>STEP 3</span><p>View results for you</p></div>
+                  <div className="lab-empty-step-item"><span>STEP 3</span><p>Inspect the model output</p></div>
                 </div>
               </div>
             )}

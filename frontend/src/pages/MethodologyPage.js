@@ -24,13 +24,6 @@ const modelCards = [
     output: 'head CT · lung CT · unsupported',
     note: 'Rejects uncertain, unsupported, and anatomy-mismatched inputs before disease classification.',
   },
-  {
-    title: 'Symptom retrieval',
-    architecture: 'TF-IDF cosine similarity + Jaccard similarity',
-    input: 'Natural-language symptom description',
-    output: 'Ranked related conditions',
-    note: 'An information-retrieval baseline. Similarity scores are not disease probabilities.',
-  },
 ];
 
 function MethodologyPage() {
@@ -38,7 +31,7 @@ function MethodologyPage() {
     <div className="research-shell">
       <header className="research-nav">
         <Link className="research-brand" to="/">CureNet</Link>
-        <nav><Link to="/imaging">Imaging</Link><Link to="/symptoms">Symptoms</Link><Link to="/about">About</Link></nav>
+        <nav><Link to="/imaging">Imaging</Link><Link to="/about">About</Link></nav>
       </header>
       <main className="research-content">
         <p className="research-eyebrow">Methods and model contracts</p>

@@ -7,7 +7,7 @@ function AboutPage() {
     <div className="research-shell">
       <header className="research-nav">
         <Link className="research-brand" to="/">CureNet</Link>
-        <nav><Link to="/imaging">Imaging</Link><Link to="/symptoms">Symptoms</Link><Link to="/methodology">Methodology</Link></nav>
+        <nav><Link to="/imaging">Imaging</Link><Link to="/methodology">Methodology</Link></nav>
       </header>
       <main className="research-content narrow-content">
         <p className="research-eyebrow">Project and contribution scope</p>
@@ -21,7 +21,7 @@ function AboutPage() {
             <li>Lung CT classification using MobileNetV2 transfer learning.</li>
             <li>Grad-CAM attention visualization for the lung classifier.</li>
             <li>React interface and user-facing research workflows.</li>
-            <li>Shared development of symptom-based information retrieval.</li>
+            <li>Integration of the imaging interface with the ML inference API.</li>
           </ul>
         </section>
         <section className="about-section">
@@ -29,7 +29,7 @@ function AboutPage() {
           <ul>
             <li>Brain-stroke CT classification was led by another team member.</li>
             <li>Node/Express APIs in the original project were led by another team member.</li>
-            <li>System integration, testing, documentation, and chatbot work were collaborative.</li>
+            <li>System integration, testing, and documentation were collaborative.</li>
           </ul>
         </section>
         <section className="research-warning">
