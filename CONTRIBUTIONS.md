@@ -1,10 +1,11 @@
-# CureNet team contributions
+# Team Contributions
 
-CureNet was developed as a collaborative final-year computer engineering
-project. The table below records primary workstream ownership without implying
-that integration, review, or testing happened in isolation.
+CureNet was developed collaboratively as a final-year undergraduate computer
+engineering project. The work was divided into primary technical and research
+areas, with all members contributing to the integration and completion of the
+project.
 
-## Contribution matrix
+## Individual contributions
 
 | Team member | Primary ownership | Main responsibilities and deliverables |
 |---|---|---|
@@ -13,7 +14,7 @@ that integration, review, or testing happened in isolation.
 | **Atharv Gangodkar** | Brain-stroke CT module | Developed the brain-stroke image-classification workstream; prepared the stroke-model workflow and supported its integration with the shared medical-imaging application. |
 | **Sufiyaan Ahmed** | Research and solution investigation | Conducted literature and technical research; investigated suitable methods and tools; analyzed problems encountered during development and helped identify practical solutions. |
 
-## Shared responsibilities
+## Collaborative activities
 
 The following activities were collaborative rather than assigned exclusively to
 one person:
@@ -24,19 +25,9 @@ one person:
 - Final-year report preparation and presentation
 - Team discussions, debugging, and implementation decisions
 
-## Contribution boundaries
+## Contribution statement
 
-- Primary ownership means the member led that workstream; it does not erase
-  reviews, assistance, or integration work performed by other members.
-- Lung CT and brain-stroke outputs are undergraduate research results, not
-  clinical diagnoses or validated medical-device outputs.
-- Dataset collection means sourcing, organizing, and preparing permitted project
-  data; it does not imply ownership of third-party datasets.
-
-## Interview-ready summary
-
-Subigya Subedi's primary contribution was the lung CT computer-vision module and
-the React frontend. Divyanshu Sharma led API development and dataset collection.
-Atharv Gangodkar led the brain-stroke CT module. Sufiyaan Ahmed led research,
-method investigation, and solution-finding when technical problems arose. The
-team collaborated on integration, testing, documentation, and presentation.
+The responsibilities listed above identify the primary area led by each member.
+The completed CureNet system was a collective project outcome, and its modules
+were reviewed, integrated, tested, documented, and presented through joint team
+effort.

@@ -1,8 +1,8 @@
 # CureNet
 
-**An anatomy-aware computer-vision project for lung CT and brain-stroke image analysis.**
+**An anatomy-aware computer vision application for lung CT and brain stroke image analysis.**
 
-CureNet is a final-year computer engineering research project focused exclusively
+CureNet is a final-year undergraduate computer engineering research project focused exclusively
 on medical-image classification. A React interface sends a rendered CT slice to a
 FastAPI service, which validates the image, checks its anatomy, runs the matching
 TensorFlow classifier, and returns class scores with explicit research limitations.
