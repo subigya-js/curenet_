@@ -11,9 +11,9 @@ be added as results.
 
 The model classifies a rendered 2D non-contrast head CT slice into three image
 patterns: no stroke, acute/hyperacute ischemic stroke, or hemorrhagic stroke.
-It also derives an aggregate stroke-pattern probability for CureNet's early
-warning interface. This is an undergraduate research demonstration, not a
-medical device or autonomous diagnostic system.
+It also derives an aggregate stroke-pattern score for comparison and evaluation.
+This is an undergraduate computer-vision research demonstration, not a medical
+device or autonomous diagnostic system.
 
 ## Architecture
 

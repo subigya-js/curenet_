@@ -1,14 +1,14 @@
 # Brain stroke CT pipeline
 
 This package rebuilds CureNet's brain-imaging component as a reproducible
-research pipeline. It preserves the report's upload-and-early-warning workflow
-while narrowing the model to a supportable input and output contract.
+computer-vision research pipeline with a defined input, output, and evaluation
+contract.
 
 ## Final task definition
 
 - Input: one 2D non-contrast head CT slice rendered as JPEG or PNG.
 - Primary output: `no_stroke`, `ischemic_stroke`, or `hemorrhagic_stroke`.
-- Derived report-compatible output: `stroke_probability = 1 - P(no_stroke)`.
+- Derived aggregate output: `stroke_probability = 1 - P(no_stroke)`.
 - Intended role: educational research and prioritization experiments only.
 - Excluded claims: diagnosis, treatment recommendation, patient-level accuracy,
   and support for MRI, photographs, or arbitrary medical images.

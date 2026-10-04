@@ -1,155 +1,73 @@
 # CureNet runbook
 
-## What must be started
+## Components
 
-Only two processes are required:
-
-| Process | Responsibility | Default address |
+| Component | Responsibility | Default address |
 |---|---|---|
-| FastAPI | HTTP API, model loading, inference, Grad-CAM, symptom retrieval | `http://127.0.0.1:8000` |
-| React | Browser interface | `http://localhost:3000` |
+| React | Lung and brain-stroke imaging interface | `http://localhost:3000` |
+| FastAPI | Model loading, validation, anatomy routing, inference, Grad-CAM | `http://127.0.0.1:8000` |
 
-The ML training packages are commands that finish; they are not servers.
-
-## Prerequisites
-
-- Python 3.11 recommended
-- Node.js 18 or 20 with npm
-- Approximately 1 GB free for Python/TensorFlow dependencies
-- The three expected local `.keras` artifacts under `ml_services/models/`
-
-Check installed model artifacts before starting:
+## Install and start the API
 
 ```bash
-python3 scripts/verify_models.py
-```
-
-All three entries should print `OK`. A fresh Git clone does not include the
-large `.keras` files; copy verified artifacts into `ml_services/models/` or
-retrain them before starting image inference.
-
-## First-time setup
-
-From the repository root:
-
-```bash
-make frontend-install
 make api-install
-```
-
-`api-install` installs the runtime API plus test dependencies. If this machine
-will also train models, install the larger training dependency set instead:
-
-```bash
-make training-install
-```
-
-Both commands use `ml_services/.venv` by default. To use another environment:
-
-```bash
-make api-install ML_VENV=.venv-research
-```
-
-## Start the complete application
-
-### Terminal 1: API and ML inference
-
-From the repository root:
-
-```bash
 make api-start
 ```
 
-With the already verified local environment in this workspace:
+To use the verified environment already present in this workspace:
 
 ```bash
 make api-start ML_VENV=.venv-tf220
 ```
 
-Confirm readiness:
+Check readiness:
 
 ```bash
 curl http://127.0.0.1:8000/api/v1/health
 ```
 
-`inference_ready` should be `true`, and `models_loaded` should contain
-`anatomy_gate`, `lung`, and `stroke`. Interactive API documentation is available
-at `http://127.0.0.1:8000/docs`.
-
-### Terminal 2: frontend
+## Install and start the frontend
 
 ```bash
+make frontend-install
 make frontend-start
 ```
 
-Open `http://localhost:3000`.
+The frontend reads `REACT_APP_ML_API_URL` from `frontend/.env` and defaults to
+`http://127.0.0.1:8000`.
 
-The frontend reads `REACT_APP_ML_API_URL` from `frontend/.env`. The provided
-example points to `http://127.0.0.1:8000`.
-
-Stop either development process with `Ctrl+C` in its terminal.
-
-## Run only the API
-
-```bash
-cd ml_services
-source .venv/bin/activate
-python -m uvicorn app:app --host 127.0.0.1 --port 8000
-```
-
-The API includes both imaging inference and symptom retrieval. There is no
-additional API or ML server to start.
-
-## Test the API manually
-
-Symptom retrieval:
-
-```bash
-curl -X POST http://127.0.0.1:8000/api/v1/symptoms/search \
-  -H 'Content-Type: application/json' \
-  -d '{"query":"persistent cough and chest pain","top_k":3}'
-```
-
-Lung CT:
+## Imaging request
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/imaging/predict \
-  -F 'analysis_type=lung' \
-  -F 'file=@/absolute/path/to/lung-slice.png'
+  -F "analysis_type=lung" \
+  -F "file=@/absolute/path/to/lung-ct.png"
 ```
 
-Brain-stroke CT:
+Use `analysis_type=stroke` for a rendered head CT slice.
+
+## Verification
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/v1/imaging/predict \
-  -F 'analysis_type=stroke' \
-  -F 'file=@/absolute/path/to/head-ct-slice.png'
-```
-
-## Run tests
-
-The complete ML suite imports training audit and metric modules, so install the
-training dependencies first:
-
-```bash
-make training-install
-make frontend-build
-make frontend-test
 make ml-test
+make frontend-test
+make frontend-build
 make verify-models
 ```
 
-If using this workspace's verified environment:
+With the verified local ML environment:
 
 ```bash
 make ml-test ML_VENV=.venv-tf220
 ```
 
-## Train models
+## Training
 
-Training does not require FastAPI or React to be running.
+```bash
+make training-install
+```
 
-Lung CT:
+Lung:
 
 ```bash
 cd ml_services
@@ -177,40 +95,31 @@ python -m anatomy_ml.train \
   --output-dir artifacts/ct_anatomy_gate_v1
 ```
 
-Consult each package README before a full run. Do not overwrite runtime models
-until the new run's metadata and evaluation outputs have been reviewed.
-
 ## Configuration
 
-| Variable | Used by | Default | Purpose |
-|---|---|---|---|
-| `REACT_APP_ML_API_URL` | React | `http://127.0.0.1:8000` | FastAPI base URL |
-| `CURENET_LUNG_MODEL_PATH` | FastAPI | `models/lung_cancer_retrained.keras` | Override lung artifact path |
-| `CURENET_REQUIRE_ANATOMY_GATE` | FastAPI | `true` | Fail closed if the anatomy gate is missing |
-| `CURENET_MAX_UPLOAD_BYTES` | FastAPI | `10485760` | Maximum in-memory upload size |
-| `CURENET_ALLOWED_ORIGINS` | FastAPI | local frontend origins | Comma-separated CORS origins |
+| Variable | Default | Purpose |
+|---|---|---|
+| `REACT_APP_ML_API_URL` | `http://127.0.0.1:8000` | Frontend API base URL |
+| `CURENET_LUNG_MODEL_PATH` | `models/lung_cancer_retrained.keras` | Override lung artifact path |
+| `CURENET_REQUIRE_ANATOMY_GATE` | `true` | Fail closed if the anatomy gate is unavailable |
+| `CURENET_MAX_UPLOAD_BYTES` | `10485760` | Maximum in-memory upload size |
+| `CURENET_ALLOWED_ORIGINS` | local frontend origins | Comma-separated CORS origins |
 
-Never disable the anatomy gate outside local interface development.
+Never bypass the anatomy gate outside isolated interface development.
 
-## Common startup failures
+## Common failures
 
 ### `inference_ready` is false
 
-Read `available_models` in `/api/v1/health` and the API startup log. Confirm the
-required `.keras` and metadata pairs exist, then run `make verify-models`.
+Inspect `available_models` in the health response, confirm the required model and
+metadata pairs exist, and run `make verify-models`.
 
-### `ModuleNotFoundError`
+### Upload rejected
 
-The wrong Python interpreter is active or dependencies were not installed.
-Run `make api-install` and start through `make api-start`.
+Use an authentic rendered axial CT image in PNG or JPEG format and select the
+matching analysis mode. Unsupported or anatomy-mismatched input is rejected.
 
-### Frontend cannot reach the API
+### Frontend cannot reach FastAPI
 
-Confirm FastAPI is running, copy `frontend/.env.example` to `frontend/.env`, and
-restart React after changing environment variables.
-
-### Upload is rejected with HTTP 422
-
-The heuristic validator or anatomy gate rejected the image, or the chosen mode
-does not match the detected anatomy. Use a clean axial JPEG/PNG CT slice and the
-corresponding `lung` or `stroke` mode.
+Confirm the API is running, verify `REACT_APP_ML_API_URL`, and restart React after
+changing frontend environment variables.

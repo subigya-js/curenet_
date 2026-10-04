@@ -2,50 +2,41 @@
 
 ## Research questions
 
-1. Can transfer learning classify visual patterns in individual rendered lung
-   and non-contrast head CT slices?
-2. Can anatomy-aware routing reject unsupported or mismatched inputs before a
-   disease-pattern classifier runs?
-3. Can lexical information retrieval return useful condition descriptions for
-   natural-language symptom queries?
+1. Can transfer learning classify rendered lung CT slices into normal, benign,
+   and malignant research classes?
+2. Can a separate transfer-learning model classify rendered head CT slices into
+   no-stroke, ischemic-stroke, and hemorrhagic-stroke research classes?
+3. Can an anatomy gate reduce cross-anatomy and unsupported-image inference?
+4. Can Grad-CAM expose the image regions that most influenced lung predictions?
 
-## Supported tasks
+## Included
 
-### Lung CT
+- Lung CT image classification with MobileNetV2.
+- Brain-stroke CT image classification with EfficientNetV2B0.
+- Anatomy-aware input routing and abstention.
+- Reproducible preprocessing and class-order metadata.
+- Slice-level evaluation and saved reports.
+- Grad-CAM attention visualization for lung output.
+- React/FastAPI integration for research demonstration.
 
-- Input: one rendered axial lung CT slice in PNG or JPEG format.
-- Output: `normal`, `benign`, or `malignant` image-pattern class.
-- Primary architecture: MobileNetV2 transfer learning.
-- Explanation: Grad-CAM attention visualization.
+## Excluded
 
-### Brain stroke
+- Clinical diagnosis or treatment recommendation.
+- Full DICOM-series interpretation.
+- Lesion detection, segmentation, or measurement.
+- Non-imaging prediction or clinical workflow automation.
+- Prospective clinical decision support.
 
-- Input: one rendered non-contrast head CT slice in PNG or JPEG format.
-- Output: `no_stroke`, `ischemic_stroke`, or `hemorrhagic_stroke`.
-- Primary architecture: EfficientNetV2B0 transfer learning.
+## Evaluation
 
-### Anatomy gate
+Classification reports should include class counts, confusion matrices,
+per-class precision/recall/F1, macro F1, balanced accuracy, and ROC-AUC where
+appropriate. Splits must be patient-disjoint whenever patient identifiers are
+available. Results should report dataset provenance, preprocessing, random seed,
+artifact checksum, and known sources of leakage or bias.
 
-- Input: a rendered image.
-- Output: `head_ct`, `lung_ct`, or `unsupported`.
-- Behavior: reject uncertain, unsupported, or anatomy-mismatched input.
+## Claim boundary
 
-### Symptom retrieval
-
-- Input: natural-language symptom description.
-- Output: ranked conditions from the project symptom corpus.
-- Baseline: TF-IDF cosine similarity combined with token-set Jaccard similarity.
-
-## Prohibited claims
-
-CureNet does not diagnose disease, localize a tumor or stroke lesion, process a
-complete clinical CT study, recommend treatment, or replace a qualified
-clinician. Similarity and softmax scores are model outputs, not calibrated
-patient-level disease probabilities.
-
-## Evaluation boundaries
-
-The public imaging datasets do not consistently expose reliable patient or
-study identifiers. Results must be described as slice-level unless a future
-dataset audit proves patient-independent evaluation. External prospective and
-clinical validation have not been performed.
+CureNet reports experimental image-classification scores. It does not establish
+clinical accuracy, disease prevalence, patient-level probability, or suitability
+for medical use.

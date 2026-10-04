@@ -1,238 +1,162 @@
 # CureNet
 
-**Anatomy-aware medical image classification and symptom information retrieval**
+**An anatomy-aware computer-vision project for lung CT and brain-stroke image analysis.**
 
-CureNet is a collaborative final-year computer engineering research project.
-The focused application combines two CT image-pattern classifiers, an anatomy
-and unsupported-input gate, Grad-CAM attention visualization, and a lexical
-symptom-retrieval baseline.
+CureNet is a final-year computer engineering research project focused exclusively
+on medical-image classification. A React interface sends a rendered CT slice to a
+FastAPI service, which validates the image, checks its anatomy, runs the matching
+TensorFlow classifier, and returns class scores with explicit research limitations.
 
-> CureNet is an educational research prototype. It is not a medical device and
-> must not be used for diagnosis, triage, treatment, or any clinical decision.
+## Computer-vision modules
 
-## Research modules
+| Module | Architecture | Input | Output |
+|---|---|---|---|
+| Lung CT | MobileNetV2 transfer learning | One rendered axial lung CT slice | `normal`, `benign`, `malignant` |
+| Brain stroke | EfficientNetV2B0 transfer learning | One rendered non-contrast head CT slice | `no_stroke`, `ischemic_stroke`, `hemorrhagic_stroke` |
+| Anatomy gate | Three-class CT image router | Rendered head/lung/unsupported image | `head_ct`, `lung_ct`, `unsupported` |
+| Explainability | Grad-CAM | Lung classifier activation | Attention overlay for model inspection |
 
-| Module | Method | Supported output |
-|---|---|---|
-| Lung CT | MobileNetV2 transfer learning | `normal`, `benign`, `malignant` |
-| Brain stroke | EfficientNetV2B0 transfer learning | `no_stroke`, `ischemic_stroke`, `hemorrhagic_stroke` |
-| Anatomy gate | Three-class classifier with abstention thresholds | `head_ct`, `lung_ct`, `unsupported` |
-| Symptom retrieval | TF-IDF cosine + Jaccard similarity | Ranked related conditions |
-
-The imaging modules accept one rendered axial CT slice in JPEG or PNG format.
-They do not process a complete DICOM study. Grad-CAM shows regions that
-influenced a model output; it is not lesion localization or segmentation.
-
-## Focused architecture
-
-```text
-React research interface
-        |
-        v
-FastAPI research service
-        +-- image validation
-        +-- anatomy/OOD gate
-        +-- lung CT classifier
-        +-- stroke CT classifier
-        +-- symptom information retrieval
-```
-
-The Node/Express, MySQL, appointment, and administration implementation from
-the original hospital-management prototype remains recoverable from Git commit
-`435a150`. It is intentionally excluded from the focused medical-AI tree.
+This software is a research prototype, not a medical device. Its outputs are
+slice-level model scores and must not be interpreted as diagnoses.
 
 ## Repository structure
 
 ```text
-frontend/
-  src/pages/              Route-level React pages
-  src/styles/             Page and shared styles
-  src/config/             Frontend runtime configuration
-ml_services/
-  app.py                  Versioned FastAPI entry point
-  imaging/                Shared image validation and anatomy contracts
-  anatomy_ml/             Anatomy-gate training pipeline
-  lung_ml/                Lung model, data, metrics, training, and documentation
-  stroke_ml/              Stroke model, data, metrics, training, and documentation
-  symptom_ir/             Retrieval service and reviewed corpus
-  models/                 Runtime artifacts, metadata, and checksum manifest
-  reports/                Reproducible evaluation evidence
-  tests/                  Model, data, validation, and retrieval tests
-docs/model_cards/         Model-specific intended use and limitations
-notebooks/                Optional hosted-training notebooks
-scripts/                  Repository maintenance utilities
+curenet_/
+|-- frontend/                  React research interface
+|-- ml_services/
+|   |-- app.py                FastAPI inference service
+|   |-- imaging/              Input validation and anatomy-gate contracts
+|   |-- lung_ml/              Lung training and evaluation pipeline
+|   |-- stroke_ml/            Brain-stroke training and evaluation pipeline
+|   |-- anatomy_ml/           Anatomy-gate training pipeline
+|   |-- models/               Runtime metadata and local model artifacts
+|   |-- reports/              Reproducible evaluation outputs
+|   `-- tests/                Imaging, model-contract, and training tests
+|-- notebooks/                Colab training notebook
+|-- scripts/verify_models.py  Model checksum verification
+`-- docs/                     Architecture, runbook, scope, and model cards
 ```
 
-Detailed documentation:
+## Quick start
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): runtime and training data flows
-- [`docs/RUNBOOK.md`](docs/RUNBOOK.md): installation, startup, API calls, training, and troubleshooting
-- [`docs/FILE_MAP.md`](docs/FILE_MAP.md): purpose and interconnections of every non-frontend file
-- [`docs/RESEARCH_SCOPE.md`](docs/RESEARCH_SCOPE.md): supported claims and evaluation boundaries
-
-## Run the focused application
-
-There are two running processes: FastAPI and React. FastAPI is both the HTTP
-API and the ML inference service. Model training is offline and does not require
-a separate server.
-
-### 1. Install dependencies
-
-Use Python 3.11. TensorFlow compatibility is not guaranteed with Python 3.13.
+### API
 
 ```bash
 make api-install
-make frontend-install
-make verify-models
-```
-
-### 2. Start FastAPI and ML inference
-
-```bash
 make api-start
 ```
 
-Health, model status, and interactive API documentation:
+The API runs at `http://127.0.0.1:8000`.
+
+### Frontend
 
 ```bash
-curl http://127.0.0.1:8000/api/v1/health
-```
-
-Open `http://127.0.0.1:8000/docs` to inspect and call the API interactively.
-
-### 3. Start the frontend in a second terminal
-
-```bash
+make frontend-install
 make frontend-start
 ```
 
-Open `http://localhost:3000`.
+The React application runs at `http://localhost:3000`.
 
-See the [runbook](docs/RUNBOOK.md) for first-clone model setup, direct commands,
-environment variables, cURL examples, and troubleshooting.
-
-## API
-
-### Image classification
+## Imaging API
 
 ```http
 POST /api/v1/imaging/predict
 Content-Type: multipart/form-data
 
-file=<jpeg-or-png>
+file=<PNG or JPEG CT slice>
 analysis_type=lung|stroke
 ```
 
-The historical `/predict` path remains as a hidden compatibility alias.
+Compatibility endpoint: `POST /predict`.
 
-### Symptom retrieval
+Health endpoint:
 
 ```http
-POST /api/v1/symptoms/search
-Content-Type: application/json
-
-{
-  "query": "persistent cough chest pain and difficulty breathing",
-  "top_k": 5
-}
+GET /api/v1/health
 ```
 
-Retrieval scores represent lexical similarity to corpus descriptions. They are
-not diagnostic confidence or disease probabilities.
+The health response reports loaded artifacts, model versions, anatomy-gate
+status, and lung-class contract verification.
 
-## Model selection at runtime
+## Inference flow
 
-Stroke loading order:
-
-1. `models/brain_stroke_v2.keras`
-
-Lung loading order:
-
-1. `CURENET_LUNG_MODEL_PATH`, when configured
-2. `models/lung_cancer_retrained.keras`
-
-The anatomy gate is required by default. Set
-`CURENET_REQUIRE_ANATOMY_GATE=false` only for local interface development; the
-API marks every resulting prediction as anatomy-unverified.
-
-Large retrained model artifacts are intentionally excluded from Git. A model is
-valid only together with its matching metadata and evaluation outputs. A model
-download/checksum workflow is planned before public release.
-
-Verify locally available artifacts against the tracked manifest:
-
-```bash
-make verify-models
-```
+1. Reject empty, oversized, malformed, or unsupported uploads.
+2. Apply basic radiological-image validation.
+3. Run the anatomy gate and reject uncertain or mismatched anatomy.
+4. Apply the preprocessing contract associated with the selected model.
+5. Run lung or brain-stroke classification.
+6. Validate output dimensions and probability semantics.
+7. Generate a Grad-CAM overlay for accepted lung CT input.
+8. Return all class scores, artifact versions, input scope, and warnings.
 
 ## Training
 
-The detailed lung protocol, outputs, and acceptance boundary are documented in
-[`ml_services/lung_ml/README.md`](ml_services/lung_ml/README.md). Stroke and anatomy-gate
-requirements are documented in their respective package READMEs.
+Install training dependencies:
 
-### Lung CT
+```bash
+make training-install
+```
+
+Lung CT:
 
 ```bash
 cd ml_services
-pip install -r requirements-train.txt
+source .venv/bin/activate
 python -m lung_ml.download
 python -m lung_ml.train
 ```
 
-### Brain stroke
+Brain stroke:
 
 ```bash
 cd ml_services
-pip install -r requirements-train.txt
+source .venv/bin/activate
+python -m stroke_ml.train --quick-check --output-dir artifacts/stroke_ct_smoke
 python -m stroke_ml.train --output-dir artifacts/stroke_ct_v2
 ```
 
-### Anatomy gate
+Anatomy gate:
 
 ```bash
 cd ml_services
+source .venv/bin/activate
 python -m anatomy_ml.train \
-  --manifest /path/to/reviewed-anatomy-manifest.csv \
+  --manifest /absolute/path/to/anatomy_manifest.csv \
   --output-dir artifacts/ct_anatomy_gate_v1
 ```
 
-Do not report a final metric until the corresponding split manifest, config,
-predictions, and model metadata come from the same training run.
+Training outputs belong under `ml_services/artifacts/`. Runtime artifacts should
+only be promoted after reviewing their metadata and evaluation reports.
 
-## Tests
-
-Install the training dependency set before running the complete ML suite:
+## Verification
 
 ```bash
-make training-install
-make frontend-build
-make frontend-test
 make ml-test
+make frontend-test
+make frontend-build
+make verify-models
 ```
 
-The full ML suite requires dependencies from `requirements-train.txt` because
-some tests audit training data and model contracts.
+## Documentation
 
-## Evaluation limitations
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- [`docs/RUNBOOK.md`](docs/RUNBOOK.md)
+- [`docs/RESEARCH_SCOPE.md`](docs/RESEARCH_SCOPE.md)
+- [`docs/FILE_MAP.md`](docs/FILE_MAP.md)
+- [`docs/model_cards/lung_ct.md`](docs/model_cards/lung_ct.md)
+- [`docs/model_cards/stroke_ct.md`](docs/model_cards/stroke_ct.md)
 
-- Current imaging evaluation is slice-level.
-- Reliable patient identifiers are not consistently available in the public
-  dataset packaging.
-- Correlated slices may cross partitions and inflate measured performance.
-- No external-site, prospective, subgroup, or clinical validation exists.
-- JPEG/PNG input loses DICOM series context and Hounsfield-unit calibration.
-- Early ischemic findings may be subtle or absent on one non-contrast CT slice.
-- The symptom corpus and relevance judgments have not been clinically validated.
+## Research limitations
 
-## Contributions
+- Inference operates on one rendered 2D slice rather than a complete DICOM study.
+- Dataset representativeness and external generalization remain limited.
+- The anatomy gate reduces unsupported-input risk but cannot guarantee validity.
+- Grad-CAM visualizes classifier influence; it is not lesion segmentation.
+- Prospective, multi-site, clinician-supervised validation has not been performed.
 
-Module ownership and collaborative work are documented in
-[`CONTRIBUTIONS.md`](CONTRIBUTIONS.md). The focused portfolio highlights the
-lung CT module, Grad-CAM integration, frontend development, and shared symptom
-retrieval work while crediting the team-led stroke and original API modules.
+## Contribution scope
 
-## License
-
-Source code is provided under the repository license. Dataset and model-artifact
-reuse remains subject to the original dataset licenses and terms.
+The primary portfolio contribution is the lung CT module, Grad-CAM integration,
+frontend development, and system integration. The brain-stroke module was led by
+another team member. See [`CONTRIBUTIONS.md`](CONTRIBUTIONS.md).
