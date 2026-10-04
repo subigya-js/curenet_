@@ -1,4 +1,4 @@
-"""Inference and symptom-retrieval API for the CureNet research application.
+"""Medical-image inference API for the CureNet research application.
 
 The saved artifacts define preprocessing and output contracts. This service is
 a research demonstration and must not be used as a medical diagnostic system.
@@ -31,11 +31,8 @@ from imaging.anatomy_gate import (
     validate_anatomy_gate_metadata,
 )
 from imaging.validator import validate_radiological_scan
-from symptom_ir.service import SymptomRetriever
-
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "models"
-SYMPTOM_DATASET_PATH = BASE_DIR / "symptom_ir" / "data" / "conditions.csv"
 ANATOMY_GATE_MODEL_PATH = MODEL_DIR / "ct_anatomy_gate_v1.keras"
 ANATOMY_GATE_METADATA_PATH = MODEL_DIR / "ct_anatomy_gate_v1.metadata.json"
 STROKE_V2_MODEL_PATH = MODEL_DIR / "brain_stroke_v2.keras"
@@ -96,7 +93,6 @@ LUNG_SEMANTICS_VERIFIED = set(LUNG_CLASS_NAMES) == {"normal", "benign", "maligna
 models: dict[str, object] = {}
 model_versions: dict[str, str] = {}
 model_metadata: dict[str, dict[str, object]] = {}
-symptom_retriever = SymptomRetriever(SYMPTOM_DATASET_PATH)
 
 
 class AttentionAnalysis(BaseModel):
@@ -133,28 +129,6 @@ class PredictionResponse(BaseModel):
     detected_anatomy: str | None = None
     anatomy_probability: float | None = None
     anatomy_gate_version: str | None = None
-
-
-class SymptomSearchRequest(BaseModel):
-    query: str = Field(min_length=2, max_length=2000)
-    top_k: int = Field(default=5, ge=1, le=10)
-
-
-class SymptomSearchResult(BaseModel):
-    condition: str
-    similarity_score: float
-    matched_terms: list[str] = Field(default_factory=list)
-
-
-class SymptomSearchResponse(BaseModel):
-    query: str
-    method: str = "tfidf_cosine_jaccard"
-    results: list[SymptomSearchResult] = Field(default_factory=list)
-    emergency_message: str | None = None
-    warning: str = (
-        "Informational retrieval only. These ranked conditions are not a "
-        "diagnosis or medical advice."
-    )
 
 
 def validate_model_contract(
@@ -322,41 +296,7 @@ async def health() -> dict[str, object]:
         "anatomy_gate_bypassed": (
             not REQUIRE_ANATOMY_GATE and "anatomy_gate" not in models
         ),
-        "symptom_retrieval": {
-            "available": True,
-            "document_count": symptom_retriever.document_count,
-            "method": "tfidf_cosine_jaccard",
-        },
     }
-
-
-@app.post("/api/v1/symptoms/search", response_model=SymptomSearchResponse)
-async def search_symptoms(request: SymptomSearchRequest) -> SymptomSearchResponse:
-    query = request.query.strip()
-    if not query:
-        raise HTTPException(status_code=422, detail="Describe at least one symptom")
-
-    emergency_message = symptom_retriever.emergency_message(query)
-    if emergency_message:
-        return SymptomSearchResponse(
-            query=query,
-            results=[],
-            emergency_message=emergency_message,
-        )
-
-    results = await run_in_threadpool(symptom_retriever.search, query, request.top_k)
-    return SymptomSearchResponse(
-        query=query,
-        results=[
-            SymptomSearchResult(
-                condition=result.condition,
-                similarity_score=result.similarity_score,
-                matched_terms=list(result.matched_terms),
-            )
-            for result in results
-        ],
-        emergency_message=None,
-    )
 
 
 def decode_and_preprocess(
@@ -614,8 +554,8 @@ def _stroke_v2_response(scores: np.ndarray) -> PredictionResponse:
         ),
         confidence_label=f"Highest model score ({probability:.1%})",
         recommended_action=(
-            "If stroke symptoms are present, call local emergency services immediately; "
-            "do not use this output to delay care. A clinician must review the complete study."
+            "For any suspected acute neurological emergency, contact local emergency services "
+            "immediately. A clinician must review the complete study."
         ),
         patient_headline=(
             "A stroke-associated image pattern was flagged."
@@ -638,7 +578,7 @@ def _stroke_v2_response(scores: np.ndarray) -> PredictionResponse:
             "not the chance that a person has a stroke."
         ),
         next_steps=[
-            "If there is face drooping, arm weakness, speech difficulty, or another sudden neurological symptom, call emergency services now",
+            "For any suspected acute neurological emergency, call emergency services now",
             "Have a qualified clinician review the complete CT study and clinical history",
             "Do not start, stop, or change treatment based on this research output",
         ],
@@ -682,20 +622,16 @@ def lung_response(
     if prediction == "normal":
         status_badge = "Research Output: Normal Pattern"
         status_level = "success"
-        patient_headline = "No unusual patterns detected in this slice."
+        patient_headline = "Highest model score: normal image class."
         patient_explanation = (
-            "The model matched this CT slice to its normal class — the tissue patterns in this image "
-            "most closely resemble normal lung tissue from its training data.\n\n"
-            "This is a research prototype result, not a medical diagnosis. It evaluates only the "
-            "single image you uploaded — not your full CT study, symptoms, or medical history. "
-            "Only a radiologist reviewing your complete scan can determine whether your lungs are healthy."
+            "Among the three training labels, the model assigned its highest score to the normal class. "
+            "This describes similarity to examples in the training data; it does not establish that the "
+            "patient or complete CT study is normal."
         )
         plain_english = (
-            "A 'Normal' lung CT scan means the lungs appear clear and healthy. It indicates that the airways are open "
-            "and filled with air, and there are no signs of abnormal growths, severe inflammation, or fluid buildup. "
-            "The blood vessels and other structures in the chest look typical for a healthy person.\n\n"
-            "Keep in mind that while this slice looks clear, it is always important to have a qualified doctor "
-            "review your entire scan and medical history."
+            "The uploaded slice looks more similar to the model's normal-class training images than to its "
+            "benign- or malignant-class images. This is a single-slice computer-vision result, not a health "
+            "clearance or diagnosis."
         )
         common_causes = [
             "This is a pattern-match score, not a clinical finding or health clearance",
@@ -703,77 +639,61 @@ def lung_response(
             "Only a radiologist can identify or rule out lung abnormalities",
         ]
         next_steps = [
-            "✅ Keep attending your regular health check-ups as scheduled",
-            "📋 If you have any symptoms (cough lasting 3+ weeks, breathlessness, chest pain, unexplained weight loss) — see a doctor regardless of this result",
-            "🏥 Share this result with your doctor — never use it alone to make any health decisions",
-            "📁 If a doctor ordered this scan, ensure they review all the images, not just this one",
+            "Inspect all three model scores rather than only the top class",
+            "Review the Grad-CAM overlay as model-attention evidence, not lesion localization",
+            "Use the complete CT study and qualified clinical interpretation for any real medical assessment",
         ]
         clinical_summary = (
             "Single-slice research classification: normal. "
             "No localization, exclusion claim, or clinical validation is available from this output."
         )
         recommended_action = (
-            "Keep up with routine health check-ups. If you have symptoms such as a persistent cough, "
-            "breathlessness, or chest discomfort, share your full scan with a doctor — "
-            "do not rely on this tool alone."
+            "Record this as a research classification only. Do not use a single-slice model output "
+            "to make a medical decision."
         )
     elif prediction == "benign":
         status_badge = "Research Output: Benign Pattern"
         status_level = "warning"
-        patient_headline = "Patterns similar to benign (non-cancerous) tissue detected."
+        patient_headline = "Highest model score: benign image class."
         patient_explanation = (
-            "The model matched this CT slice to its benign class — the image patterns most resemble "
-            "non-cancerous tissue changes in its training data, such as scar tissue, inflammation, or "
-            "a benign nodule.\n\n"
-            "This result does not confirm or rule out disease. The model cannot locate, measure, or "
-            "characterize any finding. A doctor reviewing your full imaging study and medical history "
-            "is the only way to understand what this result means for you."
+            "Among the three training labels, the model assigned its highest score to the benign class. "
+            "This is image-pattern similarity to the training data. The model cannot confirm a benign "
+            "finding or locate, measure, and characterize a lesion."
         )
         plain_english = (
-            "In medical terms, 'Benign' means a condition that is not cancer. A benign lung CT scan might show "
-            "harmless findings such as small nodules, old scar tissue from past infections, or mild inflammation. "
-            "These types of changes are very common, generally do not spread to other parts of the body, and often "
-            "do not require treatment.\n\n"
-            "However, you should still follow up with a doctor to properly evaluate these findings and ensure "
-            "they are truly harmless."
+            "The uploaded slice looks more similar to the dataset's benign-class images than to its normal- "
+            "or malignant-class images. The label is a dataset category, not a confirmed medical finding."
         )
         common_causes = [
-            "Benign does not mean 'nothing to worry about' — a doctor must still evaluate it",
-            "The model cannot locate a nodule or measure its size — it only scores pattern similarity",
-            "Benign findings can include harmless scars, old infections, or small nodules",
+            "The model only scores learned image patterns and cannot establish pathology",
+            "Grad-CAM attention is not a lesion boundary or size measurement",
+            "Acquisition, windowing, compression, and dataset bias can affect the score",
         ]
         next_steps = [
-            "📞 Book an appointment with your regular doctor this week",
-            "📁 Bring your full CT scan files (a CD, USB, or digital copy of all images) — not just this one slice",
-            "🗣️ Tell your doctor about any symptoms: cough, chest tightness, shortness of breath, or unusual fatigue",
-            "🚫 Do not interpret this result on its own — a doctor's review is the only way to understand what it means for you",
+            "Inspect all three model scores and the input-quality checks",
+            "Review the Grad-CAM overlay only as an explanation of model influence",
+            "Use the complete CT study and qualified clinical interpretation for any real medical assessment",
         ]
         clinical_summary = (
             "Single-slice research classification: benign. "
             "The classifier provides no localization, size estimate, or clinical diagnosis."
         )
         recommended_action = (
-            "See a doctor and bring your full scan files or CD. They can evaluate this finding "
-            "alongside your symptoms and medical history. Do not interpret this result on its own."
+            "Record this as a research classification only. Confirmation of any imaging finding "
+            "requires the complete study and qualified clinical interpretation."
         )
     elif prediction == "malignant":
         status_badge = "Research Output: Malignant Pattern"
         status_level = "danger"
-        patient_headline = "Patterns similar to malignant tissue detected — please see a doctor."
+        patient_headline = "Highest model score: malignant image class."
         patient_explanation = (
-            "The model matched this CT slice to its malignant class — the image patterns most resemble "
-            "tissue marked as malignant in its training data.\n\n"
-            "This is NOT a cancer diagnosis. The model cannot locate a tumor, measure its size, or "
-            "confirm cancer is present. It only compares image patterns. Many factors — including scan "
-            "quality, positioning, metal implants, or other artifacts — can produce this result even "
-            "when no cancer is present. A radiologist must review your complete scan."
+            "Among the three training labels, the model assigned its highest score to the malignant class. "
+            "This is not a cancer diagnosis. The model cannot confirm, locate, or measure a tumor, and image "
+            "quality, positioning, artifacts, and dataset bias can change the result."
         )
         plain_english = (
-            "'Malignant' is the medical term for cancerous. A malignant pattern on a lung CT scan suggests the "
-            "presence of abnormal tissue or growths that have the potential to grow aggressively and spread. "
-            "This often points to a tumor or other cancerous cells that need immediate medical attention and treatment.\n\n"
-            "It is highly important not to panic, but you must take this seriously. A radiologist needs to look at "
-            "your full scan to confirm exactly what is going on and guide your next steps."
+            "The uploaded slice looks more similar to the dataset's malignant-class images than to its "
+            "normal- or benign-class images. The output is a dataset-label score, not proof that cancer is present."
         )
         common_causes = [
             "This is a pattern-similarity score — it cannot confirm or locate cancer",
@@ -781,20 +701,17 @@ def lung_response(
             "Only a radiologist + full DICOM study + clinical history can give a real diagnosis",
         ]
         next_steps = [
-            "🏥 See a doctor as soon as possible — ideally within the next few days",
-            "📁 Bring your complete CT scan files (all slices, not just this image) to the appointment",
-            "🗣️ Tell your doctor about any symptoms: new cough, unexplained weight loss, chest pain, or fatigue",
-            "🧘 Try not to panic — many things besides cancer can cause this result. A doctor's review will clarify everything",
-            "📞 If you can't get a quick appointment, call your doctor's office and mention you have an imaging result you'd like reviewed",
+            "Inspect all three model scores and verify that the uploaded image meets the input contract",
+            "Review the Grad-CAM overlay only as an explanation of model influence",
+            "Use the complete CT study and qualified clinical interpretation for any real medical assessment",
         ]
         clinical_summary = (
             "Single-slice research classification: malignant. "
             "This output is not localized, not clinically validated, and not a diagnosis."
         )
         recommended_action = (
-            "Book an appointment with a pulmonologist or your doctor as soon as possible. "
-            "Bring your full scan files. They will review all slices and your clinical history "
-            "to determine whether follow-up or further testing is needed."
+            "Treat this as a research classification, not a diagnosis or triage decision. Any medical "
+            "interpretation requires the complete CT study and a qualified clinician."
         )
     else:
         status_badge = f"Unmapped Research Output: {prediction}"
