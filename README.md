@@ -157,6 +157,8 @@ make verify-models
 
 ## Contribution scope
 
-The primary portfolio contribution is the lung CT module, Grad-CAM integration,
-frontend development, and system integration. The brain-stroke module was led by
-another team member. See [`CONTRIBUTIONS.md`](CONTRIBUTIONS.md).
+CureNet was developed by a four-member student team with primary ownership divided
+across the lung CT and frontend work, API and dataset work, brain-stroke CT work,
+and research/problem-solving work. Integration, testing, documentation, and the
+project presentation were collaborative. See
+[`CONTRIBUTIONS.md`](CONTRIBUTIONS.md) for the named contribution matrix.

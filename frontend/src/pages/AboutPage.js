@@ -16,20 +16,20 @@ function AboutPage() {
           CureNet was developed by a computer-engineering student team. Work was divided by module and integrated into a shared research prototype.
         </p>
         <section className="about-section">
-          <h2>Primary contribution represented in this portfolio</h2>
+          <h2>Team contribution matrix</h2>
           <ul>
-            <li>Lung CT classification using MobileNetV2 transfer learning.</li>
-            <li>Grad-CAM attention visualization for the lung classifier.</li>
-            <li>React interface and user-facing research workflows.</li>
-            <li>Integration of the imaging interface with the ML inference API.</li>
+            <li><strong>Subigya Subedi:</strong> lung CT classification, Grad-CAM integration, and React frontend development.</li>
+            <li><strong>Divyanshu Sharma:</strong> API development and dataset collection and organization.</li>
+            <li><strong>Atharv Gangodkar:</strong> brain-stroke CT classification workstream.</li>
+            <li><strong>Sufiyaan Ahmed:</strong> research activities, method investigation, and solution-finding for development problems.</li>
           </ul>
         </section>
         <section className="about-section">
-          <h2>Collaborative team components</h2>
+          <h2>Shared responsibilities</h2>
           <ul>
-            <li>Brain-stroke CT classification was led by another team member.</li>
-            <li>Node/Express APIs in the original project were led by another team member.</li>
-            <li>System integration, testing, and documentation were collaborative.</li>
+            <li>System integration across the frontend, API, and image models.</li>
+            <li>Functional testing and demonstration preparation.</li>
+            <li>Documentation, final report preparation, and presentation.</li>
           </ul>
         </section>
         <section className="research-warning">
